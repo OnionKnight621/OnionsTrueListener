@@ -70,7 +70,7 @@ function getContext() {
 
 // --- Вставка тексту в активне поле: clipboard + Ctrl+V (кирилиця-безпечно) ---
 const HELPER = path.join(__dirname, 'win-paste.ps1');
-let targetHwnd = 0; // активне вікно в момент натискання F9 (куди вставляти)
+let targetHwnd = 0; // активне вікно в момент натискання хоткея (куди вставляти)
 
 function runHelper(args) {
   return new Promise((resolve) => {
@@ -86,8 +86,11 @@ function runHelper(args) {
 // Запамʼятати активне вікно (на keydown, поки фокус ще на цільовому полі)
 function captureForeground() {
   runHelper(['-Capture']).then((out) => {
-    const n = parseInt(out, 10);
+    const sep = out.indexOf('|');
+    const n = parseInt(sep >= 0 ? out.slice(0, sep) : out, 10);
+    const title = sep >= 0 ? out.slice(sep + 1) : '';
     if (n) targetHwnd = n;
+    console.log('[ptt] captured target hwnd:', targetHwnd, '| title:', JSON.stringify(title));
   });
 }
 
@@ -127,12 +130,14 @@ ipcMain.handle('whisper:transcribe', async (_event, arrayBuffer, language) => {
 // Вставка тексту туди, де курсор
 ipcMain.handle('paste:text', async (_event, text) => {
   if (!text) return false;
+  console.log('[paste] into hwnd:', targetHwnd, '| text len:', text.length);
   const prev = clipboard.readText();
   clipboard.writeText(text);
   // повертаємо фокус на запамʼятоване вікно (де стояв курсор) і шлемо Ctrl+V
-  await runHelper(['-Hwnd', String(targetHwnd)]);
+  const r = await runHelper(['-Hwnd', String(targetHwnd)]);
+  console.log('[paste] helper:', r);
   // відновити попередній буфер трохи згодом (щоб встигла вставка)
-  setTimeout(() => clipboard.writeText(prev), 600);
+  setTimeout(() => clipboard.writeText(prev), 800);
   return true;
 });
 

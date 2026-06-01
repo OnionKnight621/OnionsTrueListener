@@ -1,12 +1,11 @@
 // Захоплення мікрофона → PCM 16-bit mono 16kHz → IPC у main → транскрипція.
-// Мікрофон тримаємо «теплим». UI на кнопках (а не нативних <select>), бо вікно
-// focusable:false → нативні випадайки не розкриваються, а <button> працюють.
+// Мікрофон тримаємо «теплим»: ініціалізуємо раз, далі лише вмикаємо/вимикаємо
+// накопичення семплів (щоб push-to-talk не обрізав перше слово).
 
 const toggleBtn = document.getElementById('toggle');
 const copyBtn = document.getElementById('copy-btn');
 const langSeg = document.getElementById('lang-seg');
-const micNameEl = document.getElementById('mic-name');
-const micNextBtn = document.getElementById('mic-next');
+const micSel = document.getElementById('mic-select');
 const hotkeyNameEl = document.getElementById('hotkey-name');
 const hotkeyChangeBtn = document.getElementById('hotkey-change');
 const meterEl = document.getElementById('meter');
@@ -28,8 +27,6 @@ let inputRate = TARGET_RATE;
 let rafId = null;
 let triggeredByPtt = false;
 
-let devices = [];
-let micIndex = 0;
 let selectedDeviceId = null; // null = пристрій за замовчуванням
 let currentLang = localStorage.getItem('lang') || 'uk';
 
@@ -72,24 +69,23 @@ renderLang();
 async function listDevices() {
   try {
     const all = await navigator.mediaDevices.enumerateDevices();
-    devices = all.filter((d) => d.kind === 'audioinput');
-    if (selectedDeviceId) {
-      const i = devices.findIndex((d) => d.deviceId === selectedDeviceId);
-      if (i >= 0) micIndex = i;
-    }
-    updateMicName();
+    const mics = all.filter((d) => d.kind === 'audioinput');
+    micSel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = 'За замовчуванням';
+    micSel.appendChild(def);
+    mics.forEach((d, i) => {
+      const opt = document.createElement('option');
+      opt.value = d.deviceId;
+      opt.textContent = d.label || `Мікрофон ${i + 1}`;
+      micSel.appendChild(opt);
+    });
+    micSel.value = selectedDeviceId || '';
   } catch {}
 }
-function updateMicName() {
-  if (!devices.length) { micNameEl.textContent = '— мікрофон за замовчуванням —'; return; }
-  const d = devices[micIndex];
-  micNameEl.textContent = d?.label || `Мікрофон ${micIndex + 1}`;
-}
-micNextBtn.addEventListener('click', async () => {
-  if (!devices.length) return;
-  micIndex = (micIndex + 1) % devices.length;
-  selectedDeviceId = devices[micIndex].deviceId;
-  updateMicName();
+micSel.addEventListener('change', async () => {
+  selectedDeviceId = micSel.value || null;
   await resetMic(); // наступний запис відкриє новий пристрій
   setStatus('Мікрофон змінено.', 'ok');
 });
