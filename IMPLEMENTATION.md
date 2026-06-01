@@ -31,12 +31,16 @@ built-in OS dictation can't do (one language at a time).
 - [x] Normal focusable window with custom button UI (language segments, mic
       cycle, copy), audio cues, language selector (default `uk`, persisted).
 - [x] Clean app exit (force `app.exit(0)` so native threads don't hang the close).
+- [x] Configurable push-to-talk hotkey — modelled as a set of keys, so it
+      supports single keys, modifier+key, and modifier-only combos (e.g. Ctrl+Win).
+      Captured in UI (press & release, `Esc` cancels), saved to `config.json`;
+      default F9. Left/right modifiers normalized.
 
 ## Planned
 
 - [ ] Tray icon / hide the window so it lives in the background.
 - [ ] On-screen recording indicator (overlay).
-- [ ] Settings: configurable hotkey and microphone.
+- [ ] Settings: persistent microphone choice.
 - [ ] Autostart with Windows.
 - [ ] Package to a standalone `.exe` (account for ~668 MB `cublasLt64_12.dll`).
 - [ ] Optional: local LLM cleanup pass (punctuation, consistent anglicisms) —

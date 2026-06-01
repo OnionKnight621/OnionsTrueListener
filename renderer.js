@@ -7,6 +7,8 @@ const copyBtn = document.getElementById('copy-btn');
 const langSeg = document.getElementById('lang-seg');
 const micNameEl = document.getElementById('mic-name');
 const micNextBtn = document.getElementById('mic-next');
+const hotkeyNameEl = document.getElementById('hotkey-name');
+const hotkeyChangeBtn = document.getElementById('hotkey-change');
 const meterEl = document.getElementById('meter');
 const statusEl = document.getElementById('status');
 const outputEl = document.getElementById('output');
@@ -178,7 +180,7 @@ async function start(byPtt = false) {
   chunks = [];
   capturing = true;
   beep(880, 120); // «слухаю — можна говорити»
-  setStatus(byPtt ? '🔴 F9 — диктую…' : '🔴 Запис… натисни «Стоп».', 'warn');
+  setStatus(byPtt ? '🔴 Диктую…' : '🔴 Запис… натисни «Стоп».', 'warn');
   toggleBtn.textContent = '⏹️ Стоп';
   toggleBtn.classList.add('recording');
   meterLoop();
@@ -253,5 +255,22 @@ copyBtn.addEventListener('click', async () => {
 // Глобальний push-to-talk
 window.ptt.onStart(() => start(true));
 window.ptt.onStop(() => stop());
+
+// --- Хоткей ---
+window.hotkey.get().then((r) => { hotkeyNameEl.textContent = r.name; });
+
+hotkeyChangeBtn.addEventListener('click', async () => {
+  const prevBtn = hotkeyChangeBtn.textContent;
+  const prevName = hotkeyNameEl.textContent;
+  hotkeyChangeBtn.textContent = 'Очікую…';
+  hotkeyChangeBtn.disabled = true;
+  hotkeyNameEl.textContent = '⌨️ натисни й відпусти комбінацію (Esc — скасувати)';
+  const r = await window.hotkey.capture();
+  hotkeyNameEl.textContent = r.name;
+  hotkeyChangeBtn.textContent = prevBtn;
+  hotkeyChangeBtn.disabled = false;
+  if (r.cancelled) setStatus('Зміну хоткея скасовано.', 'warn');
+  else setStatus(`Новий хоткей: ${r.name}`, 'ok');
+});
 
 listDevices();

@@ -109,7 +109,10 @@ and a **Copy** button.
 
 ## Configuration
 
-- **Hotkey**: `PTT_KEY` in `main.js` (default `UiohookKey.F9`).
+- **Hotkey**: change it in the app — click **Змінити**, then press & release the
+  key or combo. Works with single keys (`F9`), modifier+key (`Ctrl+Space`), and
+  modifier-only combos (`Ctrl+Win`). `Esc` cancels. Default is **F9**. Saved to
+  `config.json` in the app's user-data folder.
 - **Model**: `MODEL_PATH` in `main.js`.
 - **Language default**: changed in the UI; persisted via `localStorage`.
 

@@ -19,3 +19,9 @@ contextBridge.exposeInMainWorld('ptt', {
   onStart: (cb) => ipcRenderer.on('ptt:start', () => cb()),
   onStop: (cb) => ipcRenderer.on('ptt:stop', () => cb()),
 });
+
+// Налаштування хоткея
+contextBridge.exposeInMainWorld('hotkey', {
+  get: () => ipcRenderer.invoke('hotkey:get'),
+  capture: () => ipcRenderer.invoke('hotkey:capture'),
+});
