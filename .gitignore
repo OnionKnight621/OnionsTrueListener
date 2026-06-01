@@ -1,0 +1,24 @@
+# dependencies
+node_modules/
+
+# models (large GGML weights — download separately, see README)
+models/
+
+# audio samples / scratch
+samples/
+*.wav
+
+# CUDA redist download scratch
+.cuda-dl/
+
+# build output
+dist/
+out/
+*.exe
+
+# local assistant/editor config
+.claude/
+
+# logs / misc
+*.log
+.DS_Store

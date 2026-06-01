@@ -1,0 +1,30 @@
+{
+  "name": "onions-true-listener",
+  "productName": "OnionsTrueListener",
+  "version": "0.1.0",
+  "description": "Local, offline push-to-talk dictation for Windows. Hold a hotkey, speak (Ukrainian / English / mixed), and the recognized text is pasted into the focused field. GPU-accelerated Whisper (CUDA), fully local.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "speech-to-text",
+    "dictation",
+    "whisper",
+    "stt",
+    "electron",
+    "cuda",
+    "push-to-talk",
+    "ukrainian",
+    "offline"
+  ],
+  "author": "onionknight",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^42.3.0"
+  },
+  "dependencies": {
+    "@fugood/whisper.node": "^1.0.19",
+    "uiohook-napi": "^1.5.5"
+  }
+}
