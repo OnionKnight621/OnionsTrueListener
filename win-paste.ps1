@@ -34,6 +34,9 @@ public class FG {
 
   public static void Activate(IntPtr hWnd) {
     if (hWnd == IntPtr.Zero) return;
+    // Якщо вікно вже активне (диктуємо прямо в нього) — НЕ чіпаємо фокус:
+    // alt-hack у Chrome перемикає фокус на меню браузера й збиває поле вводу.
+    if (GetForegroundWindow() == hWnd) return;
     uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
     uint cur = GetCurrentThreadId();
     // alt-hack: тап по Alt дозволяє нашому процесу змінити foreground

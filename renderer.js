@@ -216,11 +216,12 @@ async function stop() {
       outputEl.textContent = res.text;
       outputEl.classList.remove('empty');
       beep(523, 150); // «готово»
+      await window.actions.copy(res.text); // авто-копія в буфер
       if (triggeredByPtt) {
         await window.actions.paste(res.text);
-        setStatus(`✅ Вставлено за ${res.ms} ms (${res.language}).`, 'ok');
+        setStatus(`✅ Вставлено за ${res.ms} ms (${res.language}). У буфері.`, 'ok');
       } else {
-        setStatus(`✅ Готово за ${res.ms} ms (${res.language}).`, 'ok');
+        setStatus(`✅ Готово за ${res.ms} ms (${res.language}). У буфері.`, 'ok');
       }
     } else {
       outputEl.textContent = '(порожньо — спробуй гучніше/довше)';

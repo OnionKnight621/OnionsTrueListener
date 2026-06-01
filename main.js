@@ -131,13 +131,10 @@ ipcMain.handle('whisper:transcribe', async (_event, arrayBuffer, language) => {
 ipcMain.handle('paste:text', async (_event, text) => {
   if (!text) return false;
   console.log('[paste] into hwnd:', targetHwnd, '| text len:', text.length);
-  const prev = clipboard.readText();
-  clipboard.writeText(text);
+  clipboard.writeText(text); // текст лишається в буфері (авто-копія + фолбек)
   // повертаємо фокус на запамʼятоване вікно (де стояв курсор) і шлемо Ctrl+V
   const r = await runHelper(['-Hwnd', String(targetHwnd)]);
   console.log('[paste] helper:', r);
-  // відновити попередній буфер трохи згодом (щоб встигла вставка)
-  setTimeout(() => clipboard.writeText(prev), 800);
   return true;
 });
 
