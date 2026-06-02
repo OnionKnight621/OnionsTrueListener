@@ -5,7 +5,8 @@
   "description": "Local, offline push-to-talk dictation for Windows. Hold a hotkey, speak (Ukrainian / English / mixed), and the recognized text is pasted into the focused field. GPU-accelerated Whisper (CUDA), fully local.",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win"
   },
   "keywords": [
     "speech-to-text",
@@ -20,8 +21,42 @@
   ],
   "author": "onionknight",
   "license": "MIT",
+  "build": {
+    "appId": "com.onionknight.onionstruelistener",
+    "productName": "OnionsTrueListener",
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/@fugood/node-whisper-win32-x64-cuda/**",
+      "node_modules/uiohook-napi/**",
+      "win-paste.ps1"
+    ],
+    "files": [
+      "!**/*.md",
+      "!.cuda-dl/**",
+      "!models/**",
+      "!samples/**",
+      "!test-transcribe.js",
+      "!.claude/**",
+      "!node_modules/@fugood/node-whisper-win32-x64/**",
+      "!node_modules/@fugood/node-whisper-win32-x64-vulkan/**"
+    ],
+    "extraResources": [
+      {
+        "from": "models/ggml-large-v3.bin",
+        "to": "models/ggml-large-v3.bin"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
   "devDependencies": {
-    "electron": "^42.3.0"
+    "electron": "^42.3.0",
+    "electron-builder": "^25.1.8"
   },
   "dependencies": {
     "@fugood/whisper.node": "^1.0.19",

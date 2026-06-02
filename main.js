@@ -9,7 +9,10 @@ const {
 } = require('@fugood/whisper.node');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 
-const MODEL_PATH = path.join(__dirname, 'models', 'ggml-large-v3.bin');
+// dev: models/ поруч із кодом; запакований: у resources/ (через extraResources)
+const MODEL_PATH = app.isPackaged
+  ? path.join(process.resourcesPath, 'models', 'ggml-large-v3.bin')
+  : path.join(__dirname, 'models', 'ggml-large-v3.bin');
 
 let mainWindow = null;
 
@@ -69,7 +72,8 @@ function getContext() {
 }
 
 // --- Вставка тексту в активне поле: clipboard + Ctrl+V (кирилиця-безпечно) ---
-const HELPER = path.join(__dirname, 'win-paste.ps1');
+// У запакованому вигляді скрипт лежить в app.asar.unpacked (PowerShell не читає з asar)
+const HELPER = path.join(__dirname, 'win-paste.ps1').replace('app.asar', 'app.asar.unpacked');
 let targetHwnd = 0; // активне вікно в момент натискання хоткея (куди вставляти)
 
 function runHelper(args) {
