@@ -1,6 +1,6 @@
 # Implementation Notes
 
-Status, decisions, and roadmap for **OnionsTrueListener**.
+Status, decisions, and roadmap for **Onion's True Listener**.
 For setup/usage see [README.md](./README.md).
 
 ## Goal

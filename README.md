@@ -1,4 +1,4 @@
-# OnionsTrueListener
+# Onion's True Listener
 
 Local, **offline** push-to-talk dictation for Windows. Hold a hotkey, speak
 (Ukrainian / English / mixed), release — the recognized text is pasted straight

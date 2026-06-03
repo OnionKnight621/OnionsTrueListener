@@ -100,8 +100,12 @@ function captureForeground() {
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 560,
-    height: 720,
+    width: 680,
+    height: 470,
+    useContentSize: true,
+    frame: false,          // власна пиксель-арт рамка
+    resizable: false,
+    backgroundColor: '#120e24',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -146,6 +150,13 @@ ipcMain.handle('paste:text', async (_event, text) => {
 ipcMain.handle('app:copy', (_event, text) => {
   if (text) clipboard.writeText(text);
   return true;
+});
+
+// Керування безрамковим вікном
+ipcMain.on('win:minimize', () => mainWindow?.minimize());
+ipcMain.on('win:close', () => {
+  try { uIOhook.stop(); } catch {}
+  app.exit(0);
 });
 
 // --- Глобальний push-to-talk через uiohook ---

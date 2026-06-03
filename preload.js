@@ -25,3 +25,9 @@ contextBridge.exposeInMainWorld('hotkey', {
   get: () => ipcRenderer.invoke('hotkey:get'),
   capture: () => ipcRenderer.invoke('hotkey:capture'),
 });
+
+// Керування вікном (рамка власна)
+contextBridge.exposeInMainWorld('win', {
+  minimize: () => ipcRenderer.send('win:minimize'),
+  close: () => ipcRenderer.send('win:close'),
+});

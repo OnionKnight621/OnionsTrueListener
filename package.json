@@ -23,7 +23,7 @@
   "license": "MIT",
   "build": {
     "appId": "com.onionknight.onionstruelistener",
-    "productName": "OnionsTrueListener",
+    "productName": "Onion's True Listener",
     "npmRebuild": false,
     "asarUnpack": [
       "node_modules/@fugood/node-whisper-win32-x64-cuda/**",
