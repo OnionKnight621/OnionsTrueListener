@@ -1,5 +1,9 @@
 # Onion's True Listener
 
+<p align="center">
+  <img src="assets/screenshot.png" alt="Onion's True Listener — pixel-art push-to-talk dictation UI" width="620">
+</p>
+
 Local, **offline** push-to-talk dictation for Windows. Hold a hotkey, speak
 (Ukrainian / English / mixed), release — the recognized text is pasted straight
 into whatever field your cursor is in. Everything runs on your machine on the
