@@ -1,6 +1,6 @@
-// OnionsTrueListener — renderer (pixel-art skin).
-// Аудіо: мікрофон → PCM 16-bit mono 16kHz → IPC у main → транскрипція.
-// UI: екран-ТВ із хінтами/текстом, сегментний метр, кастомні дропдауни.
+// Onion's True Listener — renderer (pixel-art skin).
+// Audio: microphone -> PCM 16-bit mono 16kHz -> IPC to main -> transcription.
+// UI: TV screen with hints/text, segment meter, custom dropdowns.
 
 const screenInner = document.getElementById('screen-inner');
 const screenEl = document.getElementById('screen');
@@ -33,17 +33,17 @@ const LANGS = [
 
 let audioCtx = null, source = null, processor = null, analyser = null, stream = null;
 let chunks = [];
-let capturing = false;        // йде запис аудіо
+let capturing = false;        // audio is being recorded
 let inputRate = TARGET_RATE;
 let rafId = null;
 let triggeredByPtt = false;
 
-let selectedDeviceId = null;  // null = за замовчуванням
+let selectedDeviceId = null;  // null = default device
 let currentLang = localStorage.getItem('lang') || 'uk';
 let hotkeyName = 'F9';
 let lastText = '';
 
-// ---------- Екран ----------
+// ---------- Screen ----------
 function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
@@ -72,7 +72,7 @@ function renderScreen(state, payload = '') {
   scrbtns.classList.toggle('show', state === 'result' && !!payload);
 }
 
-// ---------- Метр ----------
+// ---------- Meter ----------
 const segs = [];
 for (let i = 0; i < SEGMENTS; i++) {
   const s = document.createElement('span');
@@ -99,7 +99,7 @@ function beep(freq, ms = 120) {
   } catch {}
 }
 
-// ---------- Дропдауни ----------
+// ---------- Dropdowns ----------
 function closeDropdowns() {
   langDrop.classList.remove('open');
   micDrop.classList.remove('open');
@@ -167,7 +167,7 @@ async function setMic(id) {
   await resetMic();
 }
 
-// ---------- Аудіо ----------
+// ---------- Audio ----------
 function floatToInt16(f32) {
   const out = new Int16Array(f32.length);
   for (let i = 0; i < f32.length; i++) {
@@ -271,7 +271,7 @@ async function stop() {
     if (res.text) {
       lastText = res.text;
       beep(523, 150);
-      await window.actions.copy(res.text); // авто-копія в буфер
+      await window.actions.copy(res.text); // auto-copy to clipboard
       if (triggeredByPtt) await window.actions.paste(res.text);
       renderScreen('result', res.text);
     } else {
@@ -300,7 +300,7 @@ clearBtn.addEventListener('click', (e) => {
   renderScreen('idle');
 });
 
-// ---------- Хоткей ----------
+// ---------- Hotkey ----------
 hotkeyBtn.addEventListener('click', async () => {
   hotkeyBtn.classList.add('is-capturing');
   renderScreen('capture');

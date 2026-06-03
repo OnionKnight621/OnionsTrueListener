@@ -9,21 +9,20 @@ const {
 } = require('@fugood/whisper.node');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 
-// dev: models/ поруч із кодом; запакований: у resources/ (через extraResources)
+// Packaged build keeps the model in resources/ (via extraResources), not next to code.
 const MODEL_PATH = app.isPackaged
   ? path.join(process.resourcesPath, 'models', 'ggml-large-v3.bin')
   : path.join(__dirname, 'models', 'ggml-large-v3.bin');
 
 let mainWindow = null;
 
-// --- Push-to-talk хоткей (налаштовується з UI, дефолт F9) ---
-// Хоткей = набір клавіш, що мають бути натиснуті ОДНОЧАСНО. Покриває одиночну
-// клавішу (F9), модифікатор+клавішу (Ctrl+Space) і чисті модифікатори (Ctrl+Win).
-// ptt = { keys: [keycode, ...] }
+// ---------- Push-to-talk hotkey ----------
+// A hotkey is a set of keys that must be held simultaneously. This covers a
+// single key (F9), modifier+key (Ctrl+Space) and modifier-only combos (Ctrl+Win).
 let ptt = { keys: [UiohookKey.F9] };
-let CONFIG_PATH = null; // зʼявиться після app.ready
+let CONFIG_PATH = null; // set once app is ready
 
-// Нормалізуємо праві модифікатори до лівих, щоб не вимагати конкретну сторону
+// Treat right-hand modifiers as their left-hand equivalent so the side doesn't matter.
 const NORM = {};
 if (UiohookKey.CtrlRight) NORM[UiohookKey.CtrlRight] = UiohookKey.Ctrl;
 if (UiohookKey.AltRight) NORM[UiohookKey.AltRight] = UiohookKey.Alt;
@@ -31,7 +30,7 @@ if (UiohookKey.ShiftRight) NORM[UiohookKey.ShiftRight] = UiohookKey.Shift;
 if (UiohookKey.MetaRight) NORM[UiohookKey.MetaRight] = UiohookKey.Meta;
 const norm = (code) => (code in NORM ? NORM[code] : code);
 
-const pressed = new Set(); // нормалізовані keycodes, що натиснуті зараз
+const pressed = new Set(); // normalized keycodes currently held down
 
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
@@ -56,12 +55,12 @@ function pttDisplay(p) {
   const rank = (k) => { const i = order.indexOf(k); return i === -1 ? 99 : i; };
   return [...p.keys].sort((a, b) => rank(a) - rank(b)).map(keyName).join('+');
 }
-// хоткей «натиснутий», якщо всі його клавіші зараз утримуються
 function comboSatisfied() {
   return ptt.keys.length > 0 && ptt.keys.every((k) => pressed.has(k));
 }
 
-// --- Whisper: лінива ініціалізація + прогрів ---
+// ---------- Whisper ----------
+// Lazily create the context once and keep it warm.
 let contextPromise = null;
 function getContext() {
   if (!contextPromise) {
@@ -71,10 +70,10 @@ function getContext() {
   return contextPromise;
 }
 
-// --- Вставка тексту в активне поле: clipboard + Ctrl+V (кирилиця-безпечно) ---
-// У запакованому вигляді скрипт лежить в app.asar.unpacked (PowerShell не читає з asar)
+// ---------- Paste into the focused field (clipboard + Ctrl+V) ----------
+// In a packaged build the script lives in app.asar.unpacked (PowerShell can't read asar).
 const HELPER = path.join(__dirname, 'win-paste.ps1').replace('app.asar', 'app.asar.unpacked');
-let targetHwnd = 0; // активне вікно в момент натискання хоткея (куди вставляти)
+let targetHwnd = 0; // foreground window captured when the hotkey was pressed
 
 function runHelper(args) {
   return new Promise((resolve) => {
@@ -87,14 +86,12 @@ function runHelper(args) {
   });
 }
 
-// Запамʼятати активне вікно (на keydown, поки фокус ще на цільовому полі)
+// Remember the target window on key-down, while it still has focus.
+// The helper returns "HWND|Title"; parseInt reads the leading handle.
 function captureForeground() {
   runHelper(['-Capture']).then((out) => {
-    const sep = out.indexOf('|');
-    const n = parseInt(sep >= 0 ? out.slice(0, sep) : out, 10);
-    const title = sep >= 0 ? out.slice(sep + 1) : '';
+    const n = parseInt(out, 10);
     if (n) targetHwnd = n;
-    console.log('[ptt] captured target hwnd:', targetHwnd, '| title:', JSON.stringify(title));
   });
 }
 
@@ -103,15 +100,14 @@ function createWindow() {
     width: 680,
     height: 470,
     useContentSize: true,
-    frame: false,          // власна пиксель-арт рамка
+    frame: false, // custom pixel-art chrome
     resizable: false,
     backgroundColor: '#120e24',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // дозволяємо AudioContext працювати без кліку у вікні (для PTT)
-      autoplayPolicy: 'no-user-gesture-required',
+      autoplayPolicy: 'no-user-gesture-required', // let AudioContext run without an in-window click
     },
   });
 
@@ -122,12 +118,11 @@ function createWindow() {
   mainWindow.loadFile('index.html');
 }
 
-// Транскрипція (main-процес, нативний CUDA-модуль)
 ipcMain.handle('whisper:transcribe', async (_event, arrayBuffer, language) => {
   const context = await getContext();
   const t0 = Date.now();
   const { promise } = context.transcribeData(arrayBuffer, {
-    language: language || 'uk', // основна мова диктовки (uk тримає англ. терміни всередині)
+    language: language || 'uk', // 'uk' keeps embedded English terms inside Ukrainian speech
   });
   const result = await promise;
   const ms = Date.now() - t0;
@@ -135,35 +130,30 @@ ipcMain.handle('whisper:transcribe', async (_event, arrayBuffer, language) => {
   return { text: (result.result || '').trim(), language: result.language, ms };
 });
 
-// Вставка тексту туди, де курсор
 ipcMain.handle('paste:text', async (_event, text) => {
   if (!text) return false;
-  console.log('[paste] into hwnd:', targetHwnd, '| text len:', text.length);
-  clipboard.writeText(text); // текст лишається в буфері (авто-копія + фолбек)
-  // повертаємо фокус на запамʼятоване вікно (де стояв курсор) і шлемо Ctrl+V
-  const r = await runHelper(['-Hwnd', String(targetHwnd)]);
-  console.log('[paste] helper:', r);
+  clipboard.writeText(text); // also serves as auto-copy / manual-paste fallback
+  await runHelper(['-Hwnd', String(targetHwnd)]);
   return true;
 });
 
-// Копіювання тексту з UI у буфер обміну (для кнопки «Копіювати»)
 ipcMain.handle('app:copy', (_event, text) => {
   if (text) clipboard.writeText(text);
   return true;
 });
 
-// Керування безрамковим вікном
+// ---------- Frameless window controls ----------
 ipcMain.on('win:minimize', () => mainWindow?.minimize());
 ipcMain.on('win:close', () => {
   try { uIOhook.stop(); } catch {}
   app.exit(0);
 });
 
-// --- Глобальний push-to-talk через uiohook ---
+// ---------- Global push-to-talk via uiohook ----------
 let pttDown = false;
-// Режим захоплення хоткея: збираємо найбільший набір одночасно натиснутих клавіш,
-// фіксуємо його, коли всі клавіші відпущено.
-let capture = null; // { resolve, set:Set, max:Set, timer }
+// While capturing a new hotkey we record the largest set of keys held at once
+// and commit it when every key is released.
+let capture = null;
 
 function finishCapture(keys) {
   if (!capture) return;
@@ -184,18 +174,17 @@ function setupHotkey() {
   uIOhook.on('keydown', (e) => {
     const code = norm(e.keycode);
 
-    // Режим захоплення нового хоткея
     if (capture) {
-      if (e.keycode === UiohookKey.Escape) { finishCapture(null); return; } // скасувати
+      if (e.keycode === UiohookKey.Escape) { finishCapture(null); return; }
       capture.set.add(code);
-      capture.max = new Set(capture.set); // запамʼятовуємо найбільший набір
+      capture.max = new Set(capture.set);
       return;
     }
 
     pressed.add(code);
     if (!pttDown && comboSatisfied()) {
       pttDown = true;
-      captureForeground(); // запамʼятати цільове поле, поки фокус ще там
+      captureForeground();
       mainWindow?.webContents.send('ptt:start');
     }
   });
@@ -206,7 +195,7 @@ function setupHotkey() {
     if (capture) {
       capture.set.delete(code);
       if (capture.set.size === 0 && capture.max && capture.max.size > 0) {
-        finishCapture([...capture.max]); // всі клавіші відпущено → фіксуємо комбо
+        finishCapture([...capture.max]);
       }
       return;
     }
@@ -222,13 +211,12 @@ function setupHotkey() {
   console.log('[ptt] global hotkey active:', pttDisplay(ptt));
 }
 
-// Поточний хоткей для UI
 ipcMain.handle('hotkey:get', () => ({ name: pttDisplay(ptt) }));
 
-// Захоплення нового хоткея: натисни клавішу/комбо й відпусти (Esc — скасувати)
+// Capture a new hotkey: press a key/combo and release (Esc cancels).
 ipcMain.handle('hotkey:capture', () => {
   return new Promise((resolve) => {
-    if (capture) finishCapture(null); // скасувати попереднє захоплення
+    if (capture) finishCapture(null);
     capture = { resolve, set: new Set(), max: null, timer: null };
     capture.timer = setTimeout(() => finishCapture(null), 10000);
   });
@@ -238,16 +226,15 @@ app.whenReady().then(() => {
   toggleNativeLog(true);
   addNativeLogListener((_level, text) => process.stdout.write(`[native] ${text}`));
 
-  Menu.setApplicationMenu(null); // прибрати дефолтне меню File/Edit/View/Window
+  Menu.setApplicationMenu(null);
 
-  // завантажити збережений хоткей (якщо є)
   CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
   const cfg = loadConfig();
   if (cfg.ptt && Array.isArray(cfg.ptt.keys) && cfg.ptt.keys.length) ptt = { keys: cfg.ptt.keys };
 
   createWindow();
   setupHotkey();
-  getContext(); // прогрів моделі у фоні
+  getContext(); // warm up the model in the background
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -256,7 +243,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   try { uIOhook.stop(); } catch {}
-  // форсований вихід: нативні треди (uiohook/whisper) інакше тримають процес
-  // живим → ✕ «зависає» і доводиться вбивати через диспетчер задач
+  // Force exit: the native threads (uiohook/whisper) otherwise keep the process
+  // alive, so ✕ would hang and require Task Manager to kill it.
   app.exit(0);
 });

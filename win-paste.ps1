@@ -1,8 +1,8 @@
-# Хелпер вставки.
-#  -Capture       → вивести "HWND|Title" активного вікна (на keydown, поки фокус на цілі)
-#  -Hwnd <число>  → активувати це вікно і надіслати Ctrl+V (на paste)
-# Активація: alt-hack (розблокування foreground-lock) + AttachThreadInput +
-# SetForegroundWindow. Вставка: справжні keystroke через keybd_event.
+# Paste helper.
+#  -Capture       -> print "HWND|Title" of the active window (on key-down, while it has focus)
+#  -Hwnd <number> -> activate that window and send Ctrl+V (on paste)
+# Activation: alt-hack (releases the foreground lock) + AttachThreadInput +
+# SetForegroundWindow. Keystrokes are sent via keybd_event.
 param(
   [long]$Hwnd = 0,
   [switch]$Capture
@@ -34,12 +34,12 @@ public class FG {
 
   public static void Activate(IntPtr hWnd) {
     if (hWnd == IntPtr.Zero) return;
-    // Якщо вікно вже активне (диктуємо прямо в нього) — НЕ чіпаємо фокус:
-    // alt-hack у Chrome перемикає фокус на меню браузера й збиває поле вводу.
+    // Already focused (dictating straight into it) -> don't touch focus:
+    // in Chrome the alt-hack shifts focus to the browser menu and loses the input field.
     if (GetForegroundWindow() == hWnd) return;
     uint fg = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
     uint cur = GetCurrentThreadId();
-    // alt-hack: тап по Alt дозволяє нашому процесу змінити foreground
+    // alt-hack: a quick Alt tap lets our process change the foreground window.
     keybd_event(VK_MENU, 0, 0, IntPtr.Zero);
     keybd_event(VK_MENU, 0, KEYUP, IntPtr.Zero);
     if (fg != cur) AttachThreadInput(fg, cur, true);
@@ -60,12 +60,9 @@ if ($Capture) {
   $h = [FG]::GetForegroundWindow()
   "$($h.ToInt64())|$([FG]::Title($h))"
 } else {
-  $before = [FG]::GetForegroundWindow().ToInt64()
   if ($Hwnd -ne 0) {
     [FG]::Activate([IntPtr]$Hwnd)
     Start-Sleep -Milliseconds 80
   }
-  $after = [FG]::GetForegroundWindow().ToInt64()
   [FG]::CtrlV()
-  "before=$before after=$after target=$Hwnd"
 }

@@ -28,13 +28,17 @@ built-in OS dictation can't do (one language at a time).
 - [x] Global push-to-talk (hold **F9**) via `uiohook-napi`.
 - [x] Paste into the focused field of any app (capture foreground on key-down,
       restore it before `Ctrl+V`).
-- [x] Normal focusable window with custom button UI (language segments, mic
-      cycle, copy), audio cues, language selector (default `uk`, persisted).
 - [x] Clean app exit (force `app.exit(0)` so native threads don't hang the close).
 - [x] Configurable push-to-talk hotkey — modelled as a set of keys, so it
       supports single keys, modifier+key, and modifier-only combos (e.g. Ctrl+Win).
       Captured in UI (press & release, `Esc` cancels), saved to `config.json`;
       default F9. Left/right modifiers normalized.
+- [x] Pixel-art "old TV" UI (frameless window, custom title bar, TV screen with
+      on-screen hints/results, segment meter, custom dropdowns, COPY/CLEAR),
+      bundled Pixelify Sans font. English UI.
+- [x] Packaging via electron-builder (asar + unpacked native bits, model as
+      extraResources). `win-unpacked` runs standalone; NSIS installer pending
+      (Windows symlink privilege / Developer Mode).
 
 ## Planned
 
@@ -42,7 +46,11 @@ built-in OS dictation can't do (one language at a time).
 - [ ] On-screen recording indicator (overlay).
 - [ ] Settings: persistent microphone choice.
 - [ ] Autostart with Windows.
-- [ ] Package to a standalone `.exe` (account for ~668 MB `cublasLt64_12.dll`).
+- [ ] **Streaming / chunked transcription** — transcribe early words while the
+      user is still speaking (lower perceived latency). Likely needs a second
+      pass / model to finalize the text once the utterance ends.
+- [ ] **Broader platform support** where feasible (macOS / Linux; non-CUDA GPU
+      backends like Vulkan/Metal, CPU fallback).
 - [ ] Optional: local LLM cleanup pass (punctuation, consistent anglicisms) —
       only if real usage demands it.
 
