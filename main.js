@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain, clipboard, Menu } = require('electron');
+const { app, BrowserWindow, session, ipcMain, clipboard, Menu, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -9,10 +9,12 @@ const {
 } = require('@fugood/whisper.node');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 
-// Packaged build keeps the model in resources/ (via extraResources), not next to code.
-const MODEL_PATH = app.isPackaged
-  ? path.join(process.resourcesPath, 'models', 'ggml-large-v3.bin')
-  : path.join(__dirname, 'models', 'ggml-large-v3.bin');
+// The model isn't bundled (too big for a release). Use a dev copy next to the
+// code if present, otherwise the one downloaded into userData on first run.
+const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin';
+const LOCAL_MODEL = path.join(__dirname, 'models', 'ggml-large-v3.bin');
+const userModelPath = () => path.join(app.getPath('userData'), 'models', 'ggml-large-v3.bin');
+const modelPath = () => (fs.existsSync(LOCAL_MODEL) ? LOCAL_MODEL : userModelPath());
 
 let mainWindow = null;
 
@@ -65,7 +67,7 @@ let contextPromise = null;
 function getContext() {
   if (!contextPromise) {
     console.log('[whisper] initializing CUDA context…');
-    contextPromise = initWhisper({ filePath: MODEL_PATH, useGpu: true }, 'cuda');
+    contextPromise = initWhisper({ filePath: modelPath(), useGpu: true }, 'cuda');
   }
   return contextPromise;
 }
@@ -140,6 +142,46 @@ ipcMain.handle('paste:text', async (_event, text) => {
 ipcMain.handle('app:copy', (_event, text) => {
   if (text) clipboard.writeText(text);
   return true;
+});
+
+// ---------- Model download (first run) ----------
+function downloadModel(onProgress) {
+  return new Promise((resolve, reject) => {
+    const dest = userModelPath();
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    const tmp = dest + '.part';
+    const file = fs.createWriteStream(tmp);
+    const req = net.request(MODEL_URL); // net follows HTTPS redirects (HF -> CDN)
+    req.on('response', (res) => {
+      if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); return; }
+      const total = parseInt(res.headers['content-length'] || '0', 10);
+      let done = 0;
+      res.on('data', (chunk) => {
+        done += chunk.length;
+        if (!file.write(chunk)) { res.pause(); file.once('drain', () => res.resume()); }
+        if (total) onProgress(done / total);
+      });
+      res.on('end', () => file.end(() => { fs.renameSync(tmp, dest); resolve(); }));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+let downloading = false;
+ipcMain.handle('model:status', () => ({ present: fs.existsSync(modelPath()) }));
+ipcMain.handle('model:download', async () => {
+  if (downloading) return { ok: false, error: 'already downloading' };
+  downloading = true;
+  try {
+    await downloadModel((pct) => mainWindow?.webContents.send('model:progress', pct));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  } finally {
+    downloading = false;
+  }
 });
 
 // ---------- Frameless window controls ----------
@@ -234,7 +276,7 @@ app.whenReady().then(() => {
 
   createWindow();
   setupHotkey();
-  getContext(); // warm up the model in the background
+  if (fs.existsSync(modelPath())) getContext(); // warm up only if the model is present
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

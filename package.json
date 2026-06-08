@@ -40,18 +40,8 @@
       "!node_modules/@fugood/node-whisper-win32-x64/**",
       "!node_modules/@fugood/node-whisper-win32-x64-vulkan/**"
     ],
-    "extraResources": [
-      {
-        "from": "models/ggml-large-v3.bin",
-        "to": "models/ggml-large-v3.bin"
-      }
-    ],
     "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "target": "zip"
     }
   },
   "devDependencies": {

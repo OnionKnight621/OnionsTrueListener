@@ -36,9 +36,11 @@ built-in OS dictation can't do (one language at a time).
 - [x] Pixel-art "old TV" UI (frameless window, custom title bar, TV screen with
       on-screen hints/results, segment meter, custom dropdowns, COPY/CLEAR),
       bundled Pixelify Sans font. English UI.
-- [x] Packaging via electron-builder (asar + unpacked native bits, model as
-      extraResources). `win-unpacked` runs standalone; NSIS installer pending
-      (Windows symlink privilege / Developer Mode).
+- [x] Packaging via electron-builder (asar + unpacked native bits). Model is
+      **not** bundled — downloaded on first run into userData (`net` + progress on
+      screen), so the release stays under GitHub's 2 GB limit (~772 MB zip).
+      Release zip is created from `win-unpacked` directly (electron-builder's
+      zip/nsis target needs winCodeSign, which fails without Developer Mode).
 
 ## Planned
 
@@ -49,8 +51,9 @@ built-in OS dictation can't do (one language at a time).
 - [ ] **Streaming / chunked transcription** — transcribe early words while the
       user is still speaking (lower perceived latency). Likely needs a second
       pass / model to finalize the text once the utterance ends.
-- [ ] **Broader platform support** where feasible (macOS / Linux; non-CUDA GPU
-      backends like Vulkan/Metal, CPU fallback).
+- [ ] **Broader platform support** — see [PLATFORMS.md](./PLATFORMS.md) for the
+      phased plan. Next up: Phase 0 (Windows CUDA→Vulkan→CPU fallback so it runs
+      on non-Blackwell GPUs). Linux/macOS + CI are later phases.
 - [ ] Optional: local LLM cleanup pass (punctuation, consistent anglicisms) —
       only if real usage demands it.
 

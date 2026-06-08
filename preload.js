@@ -26,3 +26,9 @@ contextBridge.exposeInMainWorld('win', {
   minimize: () => ipcRenderer.send('win:minimize'),
   close: () => ipcRenderer.send('win:close'),
 });
+
+contextBridge.exposeInMainWorld('model', {
+  status: () => ipcRenderer.invoke('model:status'),
+  download: () => ipcRenderer.invoke('model:download'),
+  onProgress: (cb) => ipcRenderer.on('model:progress', (_e, pct) => cb(pct)),
+});

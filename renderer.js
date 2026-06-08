@@ -42,6 +42,7 @@ let selectedDeviceId = null;  // null = default device
 let currentLang = localStorage.getItem('lang') || 'uk';
 let hotkeyName = 'F9';
 let lastText = '';
+let modelReady = false;
 
 // ---------- Screen ----------
 function escapeHtml(s) {
@@ -62,6 +63,14 @@ function renderScreen(state, payload = '') {
   } else if (state === 'capture') {
     html = `<div class="scr-big">PRESS…</div>
       <div class="scr-hint">a key or combo · <b>Esc</b> to cancel</div>`;
+  } else if (state === 'needmodel') {
+    html = `<div class="scr-big">NO MODEL</div>
+      <div class="scr-hint">Whisper model (~3 GB) is required.</div>
+      <div class="scr-hint">press <b>DOWNLOAD MODEL</b> below — one time</div>`;
+  } else if (state === 'downloading') {
+    const pct = Math.round((payload || 0) * 100);
+    html = `<div class="scr-big">DOWNLOADING…</div>
+      <div class="scr-hint">${pct}% · one-time (~3 GB)</div>`;
   } else if (state === 'result') {
     html = `<div class="scr-text">${escapeHtml(payload)}</div>`;
   } else if (state === 'error') {
@@ -235,7 +244,7 @@ function meterLoop() {
 }
 
 async function start(byPtt = false) {
-  if (capturing) return;
+  if (capturing || !modelReady) return;
   try { await ensureMic(); } catch (e) { renderScreen('error', e.message); return; }
   triggeredByPtt = byPtt;
   chunks = [];
@@ -284,7 +293,27 @@ async function stop() {
   }
 }
 
-toggleBtn.addEventListener('click', () => { if (capturing) stop(); else start(false); });
+async function downloadModel() {
+  toggleBtn.disabled = true;
+  renderScreen('downloading', 0);
+  const res = await window.model.download();
+  toggleBtn.disabled = false;
+  if (res.ok) {
+    modelReady = true;
+    toggleBtn.textContent = '▶ START';
+    renderScreen('idle');
+  } else {
+    renderScreen('error', res.error || 'download failed');
+    toggleBtn.textContent = '▼ DOWNLOAD MODEL';
+  }
+}
+
+toggleBtn.addEventListener('click', () => {
+  if (!modelReady) { downloadModel(); return; }
+  if (capturing) stop(); else start(false);
+});
+
+window.model.onProgress((pct) => renderScreen('downloading', pct));
 
 copyBtn.addEventListener('click', async (e) => {
   e.stopPropagation();
@@ -321,5 +350,14 @@ window.ptt.onStop(() => stop());
   const opts = await getMicOptions();
   micVal.textContent = (opts[0].short) + ' ▾';
   try { const r = await window.hotkey.get(); hotkeyName = r.name; hotkeyVal.textContent = r.name; } catch {}
-  renderScreen('idle');
+
+  const st = await window.model.status();
+  modelReady = !!st.present;
+  if (modelReady) {
+    toggleBtn.textContent = '▶ START';
+    renderScreen('idle');
+  } else {
+    toggleBtn.textContent = '▼ DOWNLOAD MODEL';
+    renderScreen('needmodel');
+  }
 })();

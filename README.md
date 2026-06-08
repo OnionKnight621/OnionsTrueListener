@@ -82,18 +82,19 @@ node_modules/@fugood/node-whisper-win32-x64-cuda/
 > A full CUDA Toolkit (~3 GB) is **not** required — just these three DLLs.
 > `cublasLt64_12.dll` is ~668 MB.
 
-### 3. Download a model
+### 3. Get the model
 
-Put a Whisper GGML model into `models/`:
+The Whisper `large-v3` model (~3 GB) is **not** bundled. On first launch the app
+detects it's missing, shows **NO MODEL**, and downloads it (one time) into the
+user-data folder when you click **DOWNLOAD MODEL**.
+
+For development you can instead drop it next to the code at
+`models/ggml-large-v3.bin` (the app prefers a local copy if present):
 
 ```sh
-# large-v3 (~3.1 GB) — best quality, recommended
 curl -L -o models/ggml-large-v3.bin \
   https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin
 ```
-
-The model path is set in `main.js` (`MODEL_PATH`). A smaller `ggml-base.bin`
-works for quick tests but is poor at Ukrainian.
 
 ### 4. Run
 
