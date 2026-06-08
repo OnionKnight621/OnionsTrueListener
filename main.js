@@ -9,14 +9,38 @@ const {
 } = require('@fugood/whisper.node');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 
-// The model isn't bundled (too big for a release). Use a dev copy next to the
-// code if present, otherwise the one downloaded into userData on first run.
-const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin';
-const LOCAL_MODEL = path.join(__dirname, 'models', 'ggml-large-v3.bin');
-const userModelPath = () => path.join(app.getPath('userData'), 'models', 'ggml-large-v3.bin');
-const modelPath = () => (fs.existsSync(LOCAL_MODEL) ? LOCAL_MODEL : userModelPath());
+// Safety net: log instead of popping the blocking "JS error" dialog (e.g. a
+// stray stream callback firing during shutdown). Real bugs still hit the console.
+process.on('uncaughtException', (err) => console.error('[uncaught]', err));
+
+// ---------- Models ----------
+// Models aren't bundled (too big for a release). They are downloaded on demand
+// into userData; a dev copy sitting next to the code wins (so we don't re-fetch).
+const MODEL_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/';
+const CATALOG = [
+  { id: 'large-v3', file: 'ggml-large-v3.bin', gb: 3.1, label: 'Large-v3', note: 'Best quality · heavier (~3–4 GB VRAM)', recommended: 'normal' },
+  { id: 'large-v3-turbo', file: 'ggml-large-v3-turbo.bin', gb: 1.6, label: 'Large-v3 Turbo', note: 'Almost as good · faster · lighter', recommended: 'smaller' },
+  { id: 'medium', file: 'ggml-medium.bin', gb: 1.5, label: 'Medium', note: 'Decent · multilingual' },
+  { id: 'small', file: 'ggml-small.bin', gb: 0.5, label: 'Small', note: 'Fast · weak at Ukrainian' },
+];
+const DEFAULT_MODEL = 'large-v3';
+
+const modelById = (id) => CATALOG.find((m) => m.id === id);
+const userModelDir = () => path.join(app.getPath('userData'), 'models');
+
+// Resolved path for a model id: a dev copy next to the code wins, else userData.
+function modelFilePath(id) {
+  const m = modelById(id);
+  if (!m) return null;
+  const local = path.join(__dirname, 'models', m.file);
+  return fs.existsSync(local) ? local : path.join(userModelDir(), m.file);
+}
+const isDownloaded = (id) => { const p = modelFilePath(id); return !!p && fs.existsSync(p); };
+const activeModelId = () => loadConfig().model || DEFAULT_MODEL;
+const modelPath = () => modelFilePath(activeModelId());
 
 let mainWindow = null;
+let activeReq = null; // in-flight model download (so we can abort it on close)
 
 // ---------- Push-to-talk hotkey ----------
 // A hotkey is a set of keys that must be held simultaneously. This covers a
@@ -62,14 +86,20 @@ function comboSatisfied() {
 }
 
 // ---------- Whisper ----------
-// Lazily create the context once and keep it warm.
+// Lazily create the context once for the active model and keep it warm.
 let contextPromise = null;
 function getContext() {
   if (!contextPromise) {
-    console.log('[whisper] initializing CUDA context…');
+    console.log('[whisper] initializing CUDA context…', activeModelId());
     contextPromise = initWhisper({ filePath: modelPath(), useGpu: true }, 'cuda');
   }
   return contextPromise;
+}
+async function releaseContext() {
+  if (!contextPromise) return;
+  const p = contextPromise;
+  contextPromise = null;
+  try { (await p).release(); } catch {}
 }
 
 // ---------- Paste into the focused field (clipboard + Ctrl+V) ----------
@@ -118,6 +148,9 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+
+  mainWindow.on('close', () => { try { activeReq?.abort(); } catch {} });
+  mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 ipcMain.handle('whisper:transcribe', async (_event, arrayBuffer, language) => {
@@ -144,16 +177,17 @@ ipcMain.handle('app:copy', (_event, text) => {
   return true;
 });
 
-// ---------- Model download (first run) ----------
-function downloadModel(onProgress) {
+// ---------- Model management ----------
+function downloadToFile(url, dest, onProgress) {
   return new Promise((resolve, reject) => {
-    const dest = userModelPath();
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     const tmp = dest + '.part';
     const file = fs.createWriteStream(tmp);
-    const req = net.request(MODEL_URL); // net follows HTTPS redirects (HF -> CDN)
+    const req = net.request(url); // net follows HTTPS redirects (HF -> CDN)
+    activeReq = req;
+    const finish = (fn) => { activeReq = null; fn(); };
     req.on('response', (res) => {
-      if (res.statusCode !== 200) { reject(new Error('HTTP ' + res.statusCode)); return; }
+      if (res.statusCode !== 200) { finish(() => reject(new Error('HTTP ' + res.statusCode))); return; }
       const total = parseInt(res.headers['content-length'] || '0', 10);
       let done = 0;
       res.on('data', (chunk) => {
@@ -161,21 +195,39 @@ function downloadModel(onProgress) {
         if (!file.write(chunk)) { res.pause(); file.once('drain', () => res.resume()); }
         if (total) onProgress(done / total);
       });
-      res.on('end', () => file.end(() => { fs.renameSync(tmp, dest); resolve(); }));
-      res.on('error', reject);
+      res.on('end', () => file.end(() => finish(() => { fs.renameSync(tmp, dest); resolve(); })));
+      res.on('error', (e) => finish(() => reject(e)));
     });
-    req.on('error', reject);
+    req.on('abort', () => finish(() => reject(new Error('aborted'))));
+    req.on('error', (e) => finish(() => reject(e)));
     req.end();
   });
 }
 
 let downloading = false;
-ipcMain.handle('model:status', () => ({ present: fs.existsSync(modelPath()) }));
-ipcMain.handle('model:download', async () => {
+
+// Full model list with download/active flags, for the UI.
+ipcMain.handle('model:list', () => ({
+  active: activeModelId(),
+  items: CATALOG.map((m) => ({
+    id: m.id, label: m.label, note: m.note, gb: m.gb,
+    recommended: m.recommended || null,
+    downloaded: isDownloaded(m.id),
+  })),
+}));
+
+ipcMain.handle('model:download', async (_e, id) => {
+  const m = modelById(id);
+  if (!m) return { ok: false, error: 'unknown model' };
   if (downloading) return { ok: false, error: 'already downloading' };
   downloading = true;
   try {
-    await downloadModel((pct) => mainWindow?.webContents.send('model:progress', pct));
+    const dest = path.join(userModelDir(), m.file);
+    await downloadToFile(MODEL_BASE + m.file, dest, (pct) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('model:progress', { id, pct });
+      }
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
@@ -184,9 +236,28 @@ ipcMain.handle('model:download', async () => {
   }
 });
 
+// Switch the active model; the context is rebuilt lazily on next transcription.
+ipcMain.handle('model:setActive', async (_e, id) => {
+  if (!modelById(id)) return { ok: false, error: 'unknown model' };
+  if (id !== activeModelId()) {
+    saveConfig({ model: id });
+    await releaseContext();
+  }
+  return { ok: true };
+});
+
+ipcMain.handle('model:delete', async (_e, id) => {
+  const m = modelById(id);
+  if (!m) return { ok: false, error: 'unknown model' };
+  if (id === activeModelId()) await releaseContext(); // free the file handle first
+  try { fs.rmSync(path.join(userModelDir(), m.file), { force: true }); } catch {}
+  return { ok: true };
+});
+
 // ---------- Frameless window controls ----------
 ipcMain.on('win:minimize', () => mainWindow?.minimize());
 ipcMain.on('win:close', () => {
+  try { activeReq?.abort(); } catch {}
   try { uIOhook.stop(); } catch {}
   app.exit(0);
 });

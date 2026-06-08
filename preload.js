@@ -28,7 +28,9 @@ contextBridge.exposeInMainWorld('win', {
 });
 
 contextBridge.exposeInMainWorld('model', {
-  status: () => ipcRenderer.invoke('model:status'),
-  download: () => ipcRenderer.invoke('model:download'),
-  onProgress: (cb) => ipcRenderer.on('model:progress', (_e, pct) => cb(pct)),
+  list: () => ipcRenderer.invoke('model:list'),
+  download: (id) => ipcRenderer.invoke('model:download', id),
+  setActive: (id) => ipcRenderer.invoke('model:setActive', id),
+  remove: (id) => ipcRenderer.invoke('model:delete', id),
+  onProgress: (cb) => ipcRenderer.on('model:progress', (_e, data) => cb(data)),
 });

@@ -36,11 +36,19 @@ built-in OS dictation can't do (one language at a time).
 - [x] Pixel-art "old TV" UI (frameless window, custom title bar, TV screen with
       on-screen hints/results, segment meter, custom dropdowns, COPY/CLEAR),
       bundled Pixelify Sans font. English UI.
-- [x] Packaging via electron-builder (asar + unpacked native bits). Model is
-      **not** bundled — downloaded on first run into userData (`net` + progress on
-      screen), so the release stays under GitHub's 2 GB limit (~772 MB zip).
-      Release zip is created from `win-unpacked` directly (electron-builder's
-      zip/nsis target needs winCodeSign, which fails without Developer Mode).
+- [x] Packaging: **`npm run build`** (`scripts/build.js`) — clean → electron-builder
+      `dir` target → zip via bundled 7za (~772 MB). The model isn't bundled (it's a
+      runtime download), so the release fits under GitHub's 2 GB limit. The script
+      tolerates electron-builder's winCodeSign symlink error (the unpacked app is
+      still produced; signing isn't needed for a `dir` build) → fully self-serve,
+      no Developer Mode required.
+- [x] Robustness: abort the model download + guard `webContents.send` on window
+      close (no more "Object has been destroyed" dialog mid-download);
+      `uncaughtException` is logged instead of popping a blocking dialog.
+- [x] Model manager: catalog (large-v3 / turbo / medium / small), first-run
+      choice (normal vs smaller), **⚙ Options → Models** panel to switch / download
+      / delete (inline confirm). Models live in userData; active model in
+      `config.json`; the whisper context is released & rebuilt on switch.
 
 ## Planned
 

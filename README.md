@@ -82,14 +82,19 @@ node_modules/@fugood/node-whisper-win32-x64-cuda/
 > A full CUDA Toolkit (~3 GB) is **not** required — just these three DLLs.
 > `cublasLt64_12.dll` is ~668 MB.
 
-### 3. Get the model
+### 3. Get a model
 
-The Whisper `large-v3` model (~3 GB) is **not** bundled. On first launch the app
-detects it's missing, shows **NO MODEL**, and downloads it (one time) into the
-user-data folder when you click **DOWNLOAD MODEL**.
+Models aren't bundled. On first launch the app shows **CHOOSE MODEL** and lets you
+download one (one time) into the user-data folder:
 
-For development you can instead drop it next to the code at
-`models/ggml-large-v3.bin` (the app prefers a local copy if present):
+- **Large-v3** (~3.1 GB) — best quality, heavier
+- **Large-v3 Turbo** (~1.6 GB) — almost as good, faster, lighter
+
+Manage models any time via **⚙ → Models**: switch the active model, download more
+(Large-v3 / Turbo / Medium / Small), or delete ones you don't need.
+
+For development you can instead drop a model next to the code at
+`models/<file>.bin` (a local copy wins, so it isn't re-downloaded):
 
 ```sh
 curl -L -o models/ggml-large-v3.bin \
@@ -114,17 +119,31 @@ and a **Copy** button.
 
 ## Configuration
 
-- **Hotkey**: change it in the app — click **Змінити**, then press & release the
-  key or combo. Works with single keys (`F9`), modifier+key (`Ctrl+Space`), and
-  modifier-only combos (`Ctrl+Win`). `Esc` cancels. Default is **F9**. Saved to
-  `config.json` in the app's user-data folder.
-- **Model**: `MODEL_PATH` in `main.js`.
-- **Language default**: changed in the UI; persisted via `localStorage`.
+- **Hotkey**: click the **Hotkey** button in the app, then press & release the key
+  or combo. Works with single keys (`F9`), modifier+key (`Ctrl+Space`), and
+  modifier-only combos (`Ctrl+Win`). `Esc` cancels. Default is **F9**.
+- **Model**: switch / download / delete via **⚙ → Models**.
+- **Language**: pick UKR / ENG / AUTO in the toolbar.
+
+Settings persist (hotkey & active model in `config.json` under user-data, language
+in `localStorage`).
+
+## Build
+
+```sh
+npm run build      # clean -> build -> dist/onions-true-listener-<ver>-win-x64.zip
+```
+
+Or step by step: `npm run dist` (just `dist/win-unpacked/`) then `npm run zip`.
+
+> The build prints a `winCodeSign` "cannot create symbolic link" error — that's
+> harmless. We build a `dir` target and zip it ourselves, so signing isn't needed;
+> the script ignores that error and still produces the app + zip.
 
 ## Known limitations
 
-- Windows / NVIDIA only for now (uses CUDA + PowerShell `SendKeys` for paste).
-- Pasting replaces the clipboard briefly, then restores the previous text.
+- Windows / NVIDIA (CUDA) only for now — see [PLATFORMS.md](./PLATFORMS.md).
+- The recognized text stays in the clipboard (it's also the manual-paste fallback).
 - Whisper picks a single language per utterance; very short clips can be
   mis-detected. Forcing the language (instead of "Auto") avoids this.
 

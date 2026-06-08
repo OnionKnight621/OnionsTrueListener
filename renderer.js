@@ -17,10 +17,14 @@ const langPopup = document.getElementById('lang-popup');
 const micDrop = document.getElementById('mic-drop');
 const micVal = document.getElementById('mic-val');
 const micPopup = document.getElementById('mic-popup');
+const overlay = document.getElementById('overlay');
+const modelListEl = document.getElementById('model-list');
 
 // Window controls
 document.getElementById('min-btn').addEventListener('click', () => window.win.minimize());
 document.getElementById('close-btn').addEventListener('click', () => window.win.close());
+document.getElementById('opts-btn').addEventListener('click', openOptions);
+document.getElementById('opts-close').addEventListener('click', () => overlay.classList.remove('show'));
 
 const TARGET_RATE = 16000;
 const SEGMENTS = 22;
@@ -43,6 +47,7 @@ let currentLang = localStorage.getItem('lang') || 'uk';
 let hotkeyName = 'F9';
 let lastText = '';
 let modelReady = false;
+let activeModelId = null;
 
 // ---------- Screen ----------
 function escapeHtml(s) {
@@ -63,10 +68,14 @@ function renderScreen(state, payload = '') {
   } else if (state === 'capture') {
     html = `<div class="scr-big">PRESS…</div>
       <div class="scr-hint">a key or combo · <b>Esc</b> to cancel</div>`;
-  } else if (state === 'needmodel') {
-    html = `<div class="scr-big">NO MODEL</div>
-      <div class="scr-hint">Whisper model (~3 GB) is required.</div>
-      <div class="scr-hint">press <b>DOWNLOAD MODEL</b> below — one time</div>`;
+  } else if (state === 'choose') {
+    html = `<div class="scr-big">CHOOSE MODEL</div>
+      <div class="scr-hint">pick one to download (one time):</div>
+      <div class="scr-choices">
+        <button class="scr-choice" data-model="large-v3"><b>Large-v3</b> · 3.1 GB<br><span>best quality, heavier</span></button>
+        <button class="scr-choice" data-model="large-v3-turbo"><b>Turbo</b> · 1.6 GB<br><span>almost as good, lighter</span></button>
+      </div>
+      <div class="scr-hint">more in <b>⚙</b> options</div>`;
   } else if (state === 'downloading') {
     const pct = Math.round((payload || 0) * 100);
     html = `<div class="scr-big">DOWNLOADING…</div>
@@ -293,27 +302,97 @@ async function stop() {
   }
 }
 
-async function downloadModel() {
+// ---------- Models ----------
+function setReady(ready) {
+  modelReady = ready;
+  toggleBtn.textContent = ready ? '▶ START' : '⚙ CHOOSE MODEL';
+}
+
+// Select a model as active; download it first if it isn't present yet.
+async function selectModel(id, downloaded) {
+  overlay.classList.remove('show');
+  activeModelId = id;
+  await window.model.setActive(id);
+  if (downloaded) {
+    setReady(true);
+    renderScreen('idle');
+    return;
+  }
   toggleBtn.disabled = true;
   renderScreen('downloading', 0);
-  const res = await window.model.download();
+  const res = await window.model.download(id);
   toggleBtn.disabled = false;
-  if (res.ok) {
-    modelReady = true;
-    toggleBtn.textContent = '▶ START';
-    renderScreen('idle');
-  } else {
-    renderScreen('error', res.error || 'download failed');
-    toggleBtn.textContent = '▼ DOWNLOAD MODEL';
-  }
+  if (res.ok) { setReady(true); renderScreen('idle'); }
+  else { setReady(false); renderScreen('error', res.error || 'download failed'); }
+}
+
+window.model.onProgress((d) => {
+  if (d.id === activeModelId) renderScreen('downloading', d.pct);
+});
+
+// Options panel (model list)
+async function openOptions() {
+  await renderModelList();
+  overlay.classList.add('show');
+}
+async function renderModelList() {
+  const data = await window.model.list();
+  activeModelId = data.active;
+  modelListEl.innerHTML = '';
+  data.items.forEach((m) => {
+    const row = document.createElement('div');
+    row.className = 'px-mrow' + (m.id === data.active ? ' active' : '');
+
+    const status = m.downloaded ? '<span class="px-mstatus ok">DOWNLOADED</span>'
+                                : '<span class="px-mstatus">~' + m.gb + ' GB</span>';
+    const trash = m.downloaded ? '<button class="px-mtrash">DEL</button>' : '';
+    row.innerHTML =
+      '<div class="px-mradio"></div>' +
+      '<div class="px-minfo"><div class="px-mname">' + m.label +
+      '<span class="px-mtag">' + m.gb + ' GB</span></div>' +
+      '<div class="px-mnote">' + m.note + '</div></div>' +
+      status + trash;
+
+    // pick model (ignore clicks on the trash button / its confirm)
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('.px-mtrash') || e.target.closest('.px-mconfirm')) return;
+      selectModel(m.id, m.downloaded);
+    });
+
+    const trashBtn = row.querySelector('.px-mtrash');
+    if (trashBtn) trashBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      askDelete(row, m);
+    });
+
+    modelListEl.appendChild(row);
+  });
+}
+function askDelete(row, m) {
+  const slot = row.querySelector('.px-mtrash');
+  const confirm = document.createElement('div');
+  confirm.className = 'px-mconfirm';
+  confirm.innerHTML = 'delete? <button class="yes">yes</button><button class="no">no</button>';
+  slot.replaceWith(confirm);
+  confirm.querySelector('.no').addEventListener('click', (e) => { e.stopPropagation(); renderModelList(); });
+  confirm.querySelector('.yes').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await window.model.remove(m.id);
+    if (m.id === activeModelId) setReady(false); // active model gone
+    await renderModelList();
+  });
 }
 
 toggleBtn.addEventListener('click', () => {
-  if (!modelReady) { downloadModel(); return; }
+  if (!modelReady) { openOptions(); return; }
   if (capturing) stop(); else start(false);
 });
 
-window.model.onProgress((pct) => renderScreen('downloading', pct));
+// First-run quick picks rendered on the screen
+screenInner.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-model]');
+  if (btn) selectModel(btn.dataset.model, false);
+});
 
 copyBtn.addEventListener('click', async (e) => {
   e.stopPropagation();
@@ -351,13 +430,14 @@ window.ptt.onStop(() => stop());
   micVal.textContent = (opts[0].short) + ' ▾';
   try { const r = await window.hotkey.get(); hotkeyName = r.name; hotkeyVal.textContent = r.name; } catch {}
 
-  const st = await window.model.status();
-  modelReady = !!st.present;
-  if (modelReady) {
-    toggleBtn.textContent = '▶ START';
+  const data = await window.model.list();
+  activeModelId = data.active;
+  const active = data.items.find((m) => m.id === data.active);
+  if (active && active.downloaded) {
+    setReady(true);
     renderScreen('idle');
   } else {
-    toggleBtn.textContent = '▼ DOWNLOAD MODEL';
-    renderScreen('needmodel');
+    setReady(false);
+    renderScreen('choose'); // first run: pick normal vs smaller
   }
 })();
