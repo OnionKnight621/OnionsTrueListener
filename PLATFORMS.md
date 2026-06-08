@@ -33,16 +33,41 @@ What in the codebase is tied to a platform:
 
 ## Phases
 
-### Phase 0 — Broaden Windows GPU support (NEXT UP)
+### Phase 0 — Broaden Windows GPU support ✅ DONE
 
 Make the existing Windows build work on (almost) any GPU, not just Blackwell.
+**Unified, not per-GPU:** our `@fugood` CUDA variant is built for cc 12.0 only
+(Blackwell / RTX 50xx). Rather than building multi-arch CUDA binaries ourselves,
+use **Vulkan as the universal GPU path** — it covers every NVIDIA Pascal (GTX 10xx)
+and newer, plus AMD/Intel, with one binary. CUDA stays only as the Blackwell
+fast-path.
 
+Backend by GPU:
+
+| GPU | Backend |
+|---|---|
+| RTX 50xx (Blackwell, cc 12.0) | CUDA (bundled, fastest) |
+| RTX 10xx–40xx, AMD, Intel | Vulkan |
+| no GPU / anything else | CPU (slow fallback) |
+
+**Detect, don't try-and-catch.** A CUDA binary built for cc 12.0 *loads* on an
+older card but fails at kernel launch — and a CUDA error can `abort()` the whole
+process (uncatchable). So decide up front:
+
+1. `nvidia-smi --query-gpu=compute_cap --format=csv,noheader` → CUDA if `>= 12.0`.
+2. No nvidia-smi / non-NVIDIA → Vulkan.
+3. Vulkan init fails → CPU.
+4. Cache the chosen backend in `config.json` (with a way to re-detect).
+
+Steps:
 - Re-bundle the `vulkan` (~44 MB) and `cpu` (~2 MB) variants (currently excluded).
-- Add the backend fallback `cuda → vulkan → cpu` (failure-driven, see above);
-  remember the chosen backend in `config.json` to skip retries next launch.
-- Bundling: CUDA runtime DLLs stay only with the cuda variant; Vulkan/CPU need none.
-- Done when: runs on RTX 30/40/50 (CUDA or Vulkan), AMD/Intel (Vulkan), and CPU
-  anywhere as a last resort.
+- `main.js`: GPU detector + backend pick passed to `initWhisper(opts, backend)`,
+  init-error handling, cache, surface the active backend (log / screen).
+- CUDA runtime DLLs (~770 MB) are only needed by the cuda variant; they're dead
+  weight for non-Blackwell users (possible later optimization: fetch them only
+  when CUDA is selected).
+- Testing: only CUDA (RTX 5080) is verifiable here; Vulkan/CPU need other machines
+  (Vulkan can be force-selected on the 5080 to confirm the variant loads/runs).
 
 ### Phase 1 — Platform abstraction refactor (prep for OS ports)
 

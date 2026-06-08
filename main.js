@@ -85,14 +85,70 @@ function comboSatisfied() {
   return ptt.keys.length > 0 && ptt.keys.every((k) => pressed.has(k));
 }
 
+// ---------- GPU / backend selection ----------
+// Unified approach: CUDA only on Blackwell (our prebuilt is cc 12.0), Vulkan for
+// every other GPU (NVIDIA 10xx+, AMD, Intel), CPU as a last resort.
+// We DETECT the GPU up front rather than trying CUDA blindly — a cc-12.0 binary
+// loads on an older card but aborts at kernel launch (uncatchable).
+const VARIANT_LABEL = { cuda: 'CUDA', vulkan: 'Vulkan', default: 'CPU' };
+let gpuInfo = null;        // { name, cc } or null
+let plannedBackend = 'vulkan';
+let activeBackend = null;  // confirmed once a context is built
+let detectPromise = null;
+
+function detectGpu() {
+  return new Promise((resolve) => {
+    execFile('nvidia-smi', ['--query-gpu=name,compute_cap', '--format=csv,noheader'],
+      { windowsHide: true }, (err, stdout) => {
+        if (err || !stdout) return resolve(null);
+        const [name, cc] = stdout.trim().split('\n')[0].split(',').map((s) => s.trim());
+        resolve({ name, cc: parseFloat(cc) });
+      });
+  });
+}
+async function detectBackend() {
+  gpuInfo = await detectGpu();
+  const forced = process.env.OTL_BACKEND; // e.g. OTL_BACKEND=vulkan for testing
+  if (forced && VARIANT_LABEL[forced]) plannedBackend = forced;
+  else plannedBackend = gpuInfo && gpuInfo.cc >= 12.0 ? 'cuda' : 'vulkan';
+  return plannedBackend;
+}
+// Order to try: the planned backend first, then safe fallbacks. CUDA is only ever
+// planned for Blackwell, so we never launch its kernels on an incompatible card.
+function backendOrder() {
+  const fallbacks = ['vulkan', 'default'];
+  if (plannedBackend === 'cuda') return ['cuda', ...fallbacks];
+  return [plannedBackend, ...fallbacks.filter((b) => b !== plannedBackend)];
+}
+function shortGpuName(n) {
+  return (n || 'CPU').replace(/^NVIDIA\s+GeForce\s+/i, '').replace(/^NVIDIA\s+/i, '');
+}
+function gpuLabel() {
+  return { name: shortGpuName(gpuInfo && gpuInfo.name), backend: VARIANT_LABEL[activeBackend || plannedBackend] };
+}
+function sendGpu() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('gpu:update', gpuLabel());
+}
+
 // ---------- Whisper ----------
-// Lazily create the context once for the active model and keep it warm.
 let contextPromise = null;
 function getContext() {
-  if (!contextPromise) {
-    console.log('[whisper] initializing CUDA context…', activeModelId());
-    contextPromise = initWhisper({ filePath: modelPath(), useGpu: true }, 'cuda');
-  }
+  if (contextPromise) return contextPromise;
+  contextPromise = (async () => {
+    for (const variant of backendOrder()) {
+      try {
+        console.log('[whisper] init', variant, '·', activeModelId());
+        const ctx = await initWhisper({ filePath: modelPath(), useGpu: variant !== 'default' }, variant);
+        activeBackend = variant;
+        saveConfig({ backend: variant });
+        sendGpu();
+        return ctx;
+      } catch (e) {
+        console.warn('[whisper] backend', variant, 'failed:', e.message);
+      }
+    }
+    throw new Error('no working whisper backend');
+  })();
   return contextPromise;
 }
 async function releaseContext() {
@@ -254,6 +310,8 @@ ipcMain.handle('model:delete', async (_e, id) => {
   return { ok: true };
 });
 
+ipcMain.handle('gpu:info', async () => { await detectPromise; return gpuLabel(); });
+
 // ---------- Frameless window controls ----------
 ipcMain.on('win:minimize', () => mainWindow?.minimize());
 ipcMain.on('win:close', () => {
@@ -347,7 +405,12 @@ app.whenReady().then(() => {
 
   createWindow();
   setupHotkey();
-  if (fs.existsSync(modelPath())) getContext(); // warm up only if the model is present
+
+  // Detect the GPU/backend, then warm up the model if it's already present.
+  detectPromise = detectBackend().then(() => {
+    sendGpu();
+    if (fs.existsSync(modelPath())) getContext();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

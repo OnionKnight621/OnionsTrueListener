@@ -59,9 +59,12 @@ built-in OS dictation can't do (one language at a time).
 - [ ] **Streaming / chunked transcription** — transcribe early words while the
       user is still speaking (lower perceived latency). Likely needs a second
       pass / model to finalize the text once the utterance ends.
-- [ ] **Broader platform support** — see [PLATFORMS.md](./PLATFORMS.md) for the
-      phased plan. Next up: Phase 0 (Windows CUDA→Vulkan→CPU fallback so it runs
-      on non-Blackwell GPUs). Linux/macOS + CI are later phases.
+- [x] **Phase 0 — Windows multi-GPU.** Backend chosen by `nvidia-smi compute_cap`:
+      CUDA on Blackwell (cc ≥ 12), Vulkan on every other NVIDIA/AMD/Intel, CPU
+      fallback. All three variants bundled; active GPU+backend shown bottom-left
+      on screen. `OTL_BACKEND` env var forces a backend for testing. See
+      [PLATFORMS.md](./PLATFORMS.md).
+- [ ] **Broader platform support** — Linux/macOS + CI (later phases in PLATFORMS.md).
 - [ ] Optional: local LLM cleanup pass (punctuation, consistent anglicisms) —
       only if real usage demands it.
 

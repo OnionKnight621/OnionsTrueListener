@@ -19,6 +19,7 @@ const micVal = document.getElementById('mic-val');
 const micPopup = document.getElementById('mic-popup');
 const overlay = document.getElementById('overlay');
 const modelListEl = document.getElementById('model-list');
+const gpuLabelEl = document.getElementById('gpu-label');
 
 // Window controls
 document.getElementById('min-btn').addEventListener('click', () => window.win.minimize());
@@ -393,6 +394,13 @@ screenInner.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-model]');
   if (btn) selectModel(btn.dataset.model, false);
 });
+
+// ---------- GPU / backend label ----------
+function updateGpu(d) {
+  if (d) gpuLabelEl.innerHTML = `${escapeHtml(d.name)} · <b>${escapeHtml(d.backend)}</b>`;
+}
+window.gpu.onUpdate(updateGpu);
+window.gpu.info().then(updateGpu);
 
 copyBtn.addEventListener('click', async (e) => {
   e.stopPropagation();

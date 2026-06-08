@@ -27,6 +27,11 @@ contextBridge.exposeInMainWorld('win', {
   close: () => ipcRenderer.send('win:close'),
 });
 
+contextBridge.exposeInMainWorld('gpu', {
+  info: () => ipcRenderer.invoke('gpu:info'),
+  onUpdate: (cb) => ipcRenderer.on('gpu:update', (_e, data) => cb(data)),
+});
+
 contextBridge.exposeInMainWorld('model', {
   list: () => ipcRenderer.invoke('model:list'),
   download: (id) => ipcRenderer.invoke('model:download', id),

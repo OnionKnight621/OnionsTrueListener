@@ -163,6 +163,14 @@
       user-select: text;
       white-space: pre-wrap;
     }
+    .px-gpu {
+      position: absolute;
+      bottom: 8px; left: 10px;
+      z-index: 2;
+      font-size: 10px; letter-spacing: 1px;
+      color: var(--vio-dim);
+    }
+    .px-gpu b { color: var(--cyan); font-weight: 400; }
     .px-scrbtns {
       position: absolute;
       bottom: 6px; right: 6px;
@@ -351,6 +359,7 @@
       <div class="px-bezel">
         <div class="px-screen" id="screen">
           <div class="px-screen-inner" id="screen-inner"></div>
+          <div class="px-gpu" id="gpu-label"></div>
           <div class="px-scrbtns" id="scrbtns">
             <button class="px-scrbtn" id="copy-btn" title="Copy all text">COPY</button>
             <button class="px-scrbtn" id="clear-btn" title="Clear screen">CLEAR</button>

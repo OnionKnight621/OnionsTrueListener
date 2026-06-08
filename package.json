@@ -28,7 +28,7 @@
     "productName": "Onion's True Listener",
     "npmRebuild": false,
     "asarUnpack": [
-      "node_modules/@fugood/node-whisper-win32-x64-cuda/**",
+      "node_modules/@fugood/node-whisper-win32-x64*/**",
       "node_modules/uiohook-napi/**",
       "win-paste.ps1"
     ],
@@ -38,9 +38,7 @@
       "!models/**",
       "!samples/**",
       "!test-transcribe.js",
-      "!.claude/**",
-      "!node_modules/@fugood/node-whisper-win32-x64/**",
-      "!node_modules/@fugood/node-whisper-win32-x64-vulkan/**"
+      "!.claude/**"
     ],
     "win": {
       "target": "zip"
