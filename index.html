@@ -163,13 +163,13 @@
       user-select: text;
       white-space: pre-wrap;
     }
-    .px-gpu {
-      position: absolute;
-      bottom: 8px; left: 10px;
-      z-index: 2;
-      font-size: 10px; letter-spacing: 1px;
-      color: var(--vio-dim);
+    .px-botleft {
+      position: absolute; bottom: 8px; left: 10px; z-index: 2;
+      display: flex; flex-direction: column; gap: 2px;
     }
+    .px-model { font-size: 10px; letter-spacing: 1px; color: var(--vio-dim); }
+    .px-model b { color: var(--accent-hi); font-weight: 400; }
+    .px-gpu { font-size: 10px; letter-spacing: 1px; color: var(--vio-dim); }
     .px-gpu b { color: var(--cyan); font-weight: 400; }
     .px-scrbtns {
       position: absolute;
@@ -279,14 +279,15 @@
     .px-opt.sel { color: var(--ink); background: #2e2356; }
 
     /* ===== first-run model choice (on screen) ===== */
-    .scr-choices { display: flex; gap: 10px; margin-top: 6px; }
+    .scr-choosehead { font-size: 16px; letter-spacing: 3px; color: var(--cyan); }
+    .scr-choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
     .scr-choice {
-      flex: 1; text-align: left; background: var(--box); border: 2px solid var(--box-edge);
-      color: var(--ink); font-family: inherit; font-size: 13px; padding: 10px 12px; cursor: pointer;
+      flex: 1 1 46%; text-align: left; background: var(--box); border: 2px solid var(--box-edge);
+      color: var(--ink); font-family: inherit; font-size: 12px; padding: 8px 10px; cursor: pointer;
     }
     .scr-choice:hover { background: var(--accent); border-color: var(--accent-hi); }
     .scr-choice b { color: var(--cyan); }
-    .scr-choice span { color: var(--vio); font-size: 11px; }
+    .scr-choice span { color: var(--vio); font-size: 10px; }
     .scr-choice:hover b, .scr-choice:hover span { color: #fff; }
 
     /* ===== Options / Models overlay ===== */
@@ -359,7 +360,10 @@
       <div class="px-bezel">
         <div class="px-screen" id="screen">
           <div class="px-screen-inner" id="screen-inner"></div>
-          <div class="px-gpu" id="gpu-label"></div>
+          <div class="px-botleft">
+            <div class="px-model" id="model-label"></div>
+            <div class="px-gpu" id="gpu-label"></div>
+          </div>
           <div class="px-scrbtns" id="scrbtns">
             <button class="px-scrbtn" id="copy-btn" title="Copy all text">COPY</button>
             <button class="px-scrbtn" id="clear-btn" title="Clear screen">CLEAR</button>

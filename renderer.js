@@ -20,6 +20,7 @@ const micPopup = document.getElementById('mic-popup');
 const overlay = document.getElementById('overlay');
 const modelListEl = document.getElementById('model-list');
 const gpuLabelEl = document.getElementById('gpu-label');
+const modelLabelEl = document.getElementById('model-label');
 
 // Window controls
 document.getElementById('min-btn').addEventListener('click', () => window.win.minimize());
@@ -49,6 +50,8 @@ let hotkeyName = 'F9';
 let lastText = '';
 let modelReady = false;
 let activeModelId = null;
+let modelItems = [];      // catalog with downloaded/active flags (from main)
+let downloadingGb = null; // size of the model currently downloading
 
 // ---------- Screen ----------
 function escapeHtml(s) {
@@ -70,17 +73,16 @@ function renderScreen(state, payload = '') {
     html = `<div class="scr-big">PRESS…</div>
       <div class="scr-hint">a key or combo · <b>Esc</b> to cancel</div>`;
   } else if (state === 'choose') {
-    html = `<div class="scr-big">CHOOSE MODEL</div>
-      <div class="scr-hint">pick one to download (one time):</div>
-      <div class="scr-choices">
-        <button class="scr-choice" data-model="large-v3"><b>Large-v3</b> · 3.1 GB<br><span>best quality, heavier</span></button>
-        <button class="scr-choice" data-model="large-v3-turbo"><b>Turbo</b> · 1.6 GB<br><span>almost as good, lighter</span></button>
-      </div>
-      <div class="scr-hint">more in <b>⚙</b> options</div>`;
+    const choices = modelItems.map((m) =>
+      `<button class="scr-choice" data-model="${m.id}"><b>${escapeHtml(m.label)}</b> · ${m.gb} GB` +
+      `<br><span>${escapeHtml(m.note)}</span></button>`).join('');
+    html = `<div class="scr-choosehead">CHOOSE A MODEL</div>
+      <div class="scr-choices">${choices}</div>`;
   } else if (state === 'downloading') {
     const pct = Math.round((payload || 0) * 100);
+    const gb = downloadingGb != null ? downloadingGb : '?';
     html = `<div class="scr-big">DOWNLOADING…</div>
-      <div class="scr-hint">${pct}% · one-time (~3 GB)</div>`;
+      <div class="scr-hint">${pct}% · one-time (~${gb} GB)</div>`;
   } else if (state === 'result') {
     html = `<div class="scr-text">${escapeHtml(payload)}</div>`;
   } else if (state === 'error') {
@@ -309,22 +311,38 @@ function setReady(ready) {
   toggleBtn.textContent = ready ? '▶ START' : '⚙ CHOOSE MODEL';
 }
 
+async function refreshModels() {
+  const data = await window.model.list();
+  modelItems = data.items;
+  activeModelId = data.active;
+  updateModelLabel();
+  return data;
+}
+function updateModelLabel() {
+  const m = modelItems.find((x) => x.id === activeModelId);
+  modelLabelEl.innerHTML = (m && m.downloaded) ? `Model: <b>${escapeHtml(m.label)}</b>` : '';
+}
+
 // Select a model as active; download it first if it isn't present yet.
 async function selectModel(id, downloaded) {
   overlay.classList.remove('show');
   activeModelId = id;
   await window.model.setActive(id);
+  updateModelLabel();
   if (downloaded) {
     setReady(true);
     renderScreen('idle');
     return;
   }
+  const item = modelItems.find((m) => m.id === id);
+  downloadingGb = item ? item.gb : null;
   toggleBtn.disabled = true;
   renderScreen('downloading', 0);
   const res = await window.model.download(id);
   toggleBtn.disabled = false;
   if (res.ok) { setReady(true); renderScreen('idle'); }
   else { setReady(false); renderScreen('error', res.error || 'download failed'); }
+  refreshModels(); // refresh downloaded flags
 }
 
 window.model.onProgress((d) => {
@@ -337,8 +355,7 @@ async function openOptions() {
   overlay.classList.add('show');
 }
 async function renderModelList() {
-  const data = await window.model.list();
-  activeModelId = data.active;
+  const data = await refreshModels();
   modelListEl.innerHTML = '';
   data.items.forEach((m) => {
     const row = document.createElement('div');
@@ -378,9 +395,10 @@ function askDelete(row, m) {
   confirm.querySelector('.no').addEventListener('click', (e) => { e.stopPropagation(); renderModelList(); });
   confirm.querySelector('.yes').addEventListener('click', async (e) => {
     e.stopPropagation();
+    const wasActive = m.id === activeModelId;
     await window.model.remove(m.id);
-    if (m.id === activeModelId) setReady(false); // active model gone
     await renderModelList();
+    if (wasActive) { setReady(false); renderScreen('choose'); } // active model gone
   });
 }
 
@@ -392,7 +410,9 @@ toggleBtn.addEventListener('click', () => {
 // First-run quick picks rendered on the screen
 screenInner.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-model]');
-  if (btn) selectModel(btn.dataset.model, false);
+  if (!btn) return;
+  const m = modelItems.find((x) => x.id === btn.dataset.model);
+  selectModel(btn.dataset.model, m ? m.downloaded : false);
 });
 
 // ---------- GPU / backend label ----------
@@ -438,14 +458,13 @@ window.ptt.onStop(() => stop());
   micVal.textContent = (opts[0].short) + ' ▾';
   try { const r = await window.hotkey.get(); hotkeyName = r.name; hotkeyVal.textContent = r.name; } catch {}
 
-  const data = await window.model.list();
-  activeModelId = data.active;
+  const data = await refreshModels();
   const active = data.items.find((m) => m.id === data.active);
   if (active && active.downloaded) {
     setReady(true);
     renderScreen('idle');
   } else {
     setReady(false);
-    renderScreen('choose'); // first run: pick normal vs smaller
+    renderScreen('choose'); // first run: pick any of the available models
   }
 })();
