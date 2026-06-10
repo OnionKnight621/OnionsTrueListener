@@ -50,23 +50,16 @@ built-in OS dictation can't do (one language at a time).
       / delete (inline confirm). Models live in userData; active model in
       `config.json`; the whisper context is released & rebuilt on switch.
 
-## Planned
-
-- [ ] Tray icon / hide the window so it lives in the background.
-- [ ] On-screen recording indicator (overlay).
-- [ ] Settings: persistent microphone choice.
-- [ ] Autostart with Windows.
-- [ ] **Streaming / chunked transcription** — transcribe early words while the
-      user is still speaking (lower perceived latency). Likely needs a second
-      pass / model to finalize the text once the utterance ends.
 - [x] **Phase 0 — Windows multi-GPU.** Backend chosen by `nvidia-smi compute_cap`:
       CUDA on Blackwell (cc ≥ 12), Vulkan on every other NVIDIA/AMD/Intel, CPU
-      fallback. All three variants bundled; active GPU+backend shown bottom-left
-      on screen. `OTL_BACKEND` env var forces a backend for testing. See
-      [PLATFORMS.md](./PLATFORMS.md).
-- [ ] **Broader platform support** — Linux/macOS + CI (later phases in PLATFORMS.md).
-- [ ] Optional: local LLM cleanup pass (punctuation, consistent anglicisms) —
-      only if real usage demands it.
+      fallback. All three variants bundled; active GPU+backend shown on screen.
+      `OTL_BACKEND` env var forces a backend for testing. See [PLATFORMS.md](./PLATFORMS.md).
+
+## Planned
+
+See **[ROADMAP.md](./ROADMAP.md)** — real-time/streaming transcription (+ a second
+cleanup model), macOS/Linux (Phase 1+ in [PLATFORMS.md](./PLATFORMS.md)), and
+quality-of-life items (tray, overlay indicator, autostart, persistent mic).
 
 ## Key decisions
 

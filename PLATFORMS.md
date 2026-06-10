@@ -2,8 +2,8 @@
 
 Planning doc for running on more systems (different GPUs and OSes).
 
-**Status:** planning only. **Priority:** Phase 0 (broaden Windows GPU support).
-OS ports (Linux/macOS) and CI are future phases.
+**Status:** Phase 0 (broader Windows GPU support) is **done** — CUDA/Vulkan/CPU
+auto-selected. Next up: the OS ports (Linux/macOS) and CI below.
 
 ## Platform-specific surface
 
