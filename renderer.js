@@ -24,6 +24,9 @@ const modelLabelEl = document.getElementById('model-label');
 const llmLabelEl = document.getElementById('llm-label');
 const cleanDrop = document.getElementById('clean-drop');
 const cleanVal = document.getElementById('clean-val');
+const dictInfoEl = document.getElementById('dict-info');
+const dictOpenBtn = document.getElementById('dict-open');
+const dictReloadBtn = document.getElementById('dict-reload');
 
 // Window controls
 document.getElementById('min-btn').addEventListener('click', () => window.win.minimize());
@@ -52,6 +55,7 @@ let currentLang = localStorage.getItem('lang') || 'uk';
 let hotkeyName = 'F9';
 let lastText = '';           // final text (cleaned, if cleanup ran)
 let lastRaw = '';            // pre-cleanup text; '' when cleanup didn't run / no change
+let lastFixes = [];          // dictionary substitutions from the last utterance
 let modelReady = false;
 let activeModelId = null;
 let modelItems = [];      // catalog with downloaded/active flags (from main)
@@ -62,8 +66,16 @@ let cleanupOn = false;    // second-pass LLM cleanup toggle
 function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
-// Result body: a single boxed text, or RAW vs CLEANED side-by-side whenever the
-// cleanup pass ran — so its impact is always visible, even when it changed nothing.
+// Result body: a single boxed text, or RAW vs FINAL side-by-side whenever a
+// post-pass ran — so its impact is always visible, even when it changed nothing.
+// "FIXED: келем → килим · гадо → Godot". Repeats collapse into one pair, since
+// the same rule firing five times is one thing the user needs to know about.
+function fixesHtml() {
+  if (!lastFixes.length) return '';
+  const pairs = [...new Set(lastFixes.map((h) => `${h.from} → ${h.to}`))];
+  return `<div class="scr-fixes"><b>FIXED</b> ${escapeHtml(pairs.join(' · '))}</div>`;
+}
+
 function resultHtml(cleaned) {
   if (lastRaw) {
     const same = lastRaw === cleaned;
@@ -73,12 +85,12 @@ function resultHtml(cleaned) {
           <div class="scr-text scr-box">${escapeHtml(lastRaw)}</div>
         </div>
         <div class="scr-block">
-          <div class="scr-blabel">CLEANED${same ? ' · no change' : ''}</div>
+          <div class="scr-blabel">FINAL${same ? ' · no change' : ''}</div>
           <div class="scr-text scr-box">${escapeHtml(cleaned)}</div>
         </div>
-      </div>`;
+      </div>${fixesHtml()}`;
   }
-  return `<div class="scr-text scr-box">${escapeHtml(cleaned)}</div>`;
+  return `<div class="scr-text scr-box">${escapeHtml(cleaned)}</div>${fixesHtml()}`;
 }
 
 function renderScreen(state, payload = '') {
@@ -318,12 +330,14 @@ async function stop() {
     const res = await window.whisper.transcribe(pcm.buffer, currentLang);
     if (res.text) {
       let text = res.text;
-      lastRaw = '';
       if (cleanupOn) {
         renderScreen('cleaning');
         text = await window.cleanup.run(text); // fails open to raw text in main
-        lastRaw = res.text; // keep the pre-cleanup text to show the diff
       }
+      const fixed = await window.glossary.apply(text); // user dictionary, always last
+      text = fixed.text;
+      lastFixes = fixed.hits;
+      lastRaw = (cleanupOn || text !== res.text) ? res.text : ''; // show the diff when anything ran
       lastText = text;
       beep(523, 150);
       await window.actions.copy(text); // auto-copy to clipboard
@@ -386,6 +400,7 @@ window.model.onProgress((d) => {
 // Options panel (model list)
 async function openOptions() {
   await renderModelList();
+  updateDictUi(await window.glossary.info());
   overlay.classList.add('show');
 }
 async function renderModelList() {
@@ -470,6 +485,19 @@ cleanDrop.addEventListener('click', async () => {
 });
 window.cleanup.info().then(updateCleanupUi);
 
+// ---------- Dictionary (glossary.json) ----------
+function updateDictUi(info) {
+  dictInfoEl.classList.toggle('err', !!info.error);
+  dictInfoEl.textContent = info.error
+    ? `invalid JSON — ${info.error}`
+    : `${info.count} ${info.count === 1 ? 'entry' : 'entries'} · glossary.json`;
+  dictInfoEl.title = info.path || '';
+}
+dictOpenBtn.addEventListener('click', () => window.glossary.open());
+dictReloadBtn.addEventListener('click', async () => {
+  updateDictUi(await window.glossary.reload());
+});
+
 copyBtn.addEventListener('click', async (e) => {
   e.stopPropagation();
   if (!lastText) return;
@@ -482,6 +510,7 @@ clearBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   lastText = '';
   lastRaw = '';
+  lastFixes = [];
   renderScreen('idle');
 });
 

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, ipcMain, clipboard, Menu, net } = require('electron');
+const { app, BrowserWindow, session, ipcMain, clipboard, Menu, net, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
@@ -9,6 +9,7 @@ const {
 } = require('@fugood/whisper.node');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
 const { cleanup } = require('./cleanup');
+const glossary = require('./glossary');
 
 // Safety net: log instead of popping the blocking "JS error" dialog (e.g. a
 // stray stream callback firing during shutdown). Real bugs still hit the console.
@@ -54,6 +55,36 @@ function llmModelPath() {
 }
 const llmDownloaded = () => fs.existsSync(llmModelPath());
 const cleanupEnabled = () => !!loadConfig().cleanup;
+
+// ---------- User dictionary ----------
+// A hand-editable JSON file in userData; see glossary.js for the matching rules.
+// Reloaded automatically when its mtime changes, so edits apply without a restart.
+let GLOSSARY_PATH = null; // set once app is ready
+const GLOSSARY_SEED = {
+  _help: 'Replacements applied to the final text. mode: "root" (default) matches the '
+    + 'start of a word and keeps the ending, so one rule covers all inflections; '
+    + '"word" matches whole words only; "anywhere" matches any substring.',
+  entries: [
+    { to: 'килим', from: ['келем', 'кілем'], mode: 'root' },
+  ],
+};
+
+let glossaryCache = { mtimeMs: -1, rules: null, count: 0, error: null };
+
+function loadGlossary() {
+  let mtimeMs = 0;
+  try { mtimeMs = fs.statSync(GLOSSARY_PATH).mtimeMs; } catch {}
+  if (mtimeMs && mtimeMs === glossaryCache.mtimeMs) return glossaryCache;
+  try {
+    const entries = glossary.parseEntries(JSON.parse(fs.readFileSync(GLOSSARY_PATH, 'utf8')));
+    glossaryCache = { mtimeMs, rules: glossary.compile(entries), count: entries.length, error: null };
+  } catch (e) {
+    // Invalid JSON must not break dictation — drop the rules and surface it in the UI.
+    console.warn('[glossary] not loaded:', e.message);
+    glossaryCache = { mtimeMs, rules: null, count: 0, error: e.message };
+  }
+  return glossaryCache;
+}
 
 let mainWindow = null;
 let activeReq = null; // in-flight model download (so we can abort it on close)
@@ -254,6 +285,27 @@ ipcMain.handle('cleanup:run', async (_e, text) => {
   return cleanup(text, llmModelPath());
 });
 
+// ---------- User dictionary ----------
+// Last step of the pipeline: runs after the LLM pass, so cleanup can't undo it.
+// -> { text, hits }; hits feed the "FIXED" line on the result screen.
+ipcMain.handle('glossary:apply', (_e, text) => glossary.apply(text, loadGlossary().rules));
+
+ipcMain.handle('glossary:info', () => {
+  const { count, error } = loadGlossary();
+  return { count, error, path: GLOSSARY_PATH };
+});
+
+ipcMain.handle('glossary:reload', () => {
+  glossaryCache = { mtimeMs: -1, rules: null, count: 0, error: null };
+  const { count, error } = loadGlossary();
+  return { count, error, path: GLOSSARY_PATH };
+});
+
+ipcMain.handle('glossary:open', async () => {
+  const error = await shell.openPath(GLOSSARY_PATH);
+  return { ok: !error, error: error || null };
+});
+
 ipcMain.handle('paste:text', async (_event, text) => {
   if (!text) return false;
   clipboard.writeText(text); // also serves as auto-copy / manual-paste fallback
@@ -433,6 +485,11 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
   CONFIG_PATH = path.join(app.getPath('userData'), 'config.json');
+  GLOSSARY_PATH = path.join(app.getPath('userData'), 'glossary.json');
+  // Seed on first run so the file is there to open and documents its own format.
+  if (!fs.existsSync(GLOSSARY_PATH)) {
+    try { fs.writeFileSync(GLOSSARY_PATH, JSON.stringify(GLOSSARY_SEED, null, 2)); } catch {}
+  }
   const cfg = loadConfig();
   if (cfg.ptt && Array.isArray(cfg.ptt.keys) && cfg.ptt.keys.length) ptt = { keys: cfg.ptt.keys };
 

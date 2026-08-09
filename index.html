@@ -174,28 +174,37 @@
     .scr-box::-webkit-scrollbar-thumb:hover { background: var(--accent); }
     .scr-box::-webkit-scrollbar-track { background: transparent; }
 
-    /* RAW vs CLEANED: stacked, each block scrolls independently */
+    /* RAW vs FINAL: stacked, each block scrolls independently */
     .scr-compare {
       display: flex; flex-direction: column; gap: 8px;
-      width: 100%; height: 100%; min-height: 0;
+      width: 100%; flex: 1 1 auto; min-height: 0;
     }
     .scr-block { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
     .scr-blabel {
       font-size: 9px; letter-spacing: 2px; color: var(--vio-dim); text-transform: uppercase;
     }
     .scr-compare .scr-text { font-size: 14px; flex: 1; min-height: 0; }
-    .px-botleft {
-      position: absolute; bottom: 8px; left: 10px; z-index: 2;
-      display: flex; flex-direction: column; gap: 2px;
+    /* dictionary substitutions applied to the last utterance */
+    .scr-fixes {
+      flex: none; font-size: 10px; letter-spacing: 1px; line-height: 1.6;
+      color: var(--vio-dim); max-height: 34px; overflow-y: auto;
     }
-    .px-model { font-size: 10px; letter-spacing: 1px; color: var(--vio-dim); }
+    .scr-fixes b { color: var(--cyan); font-weight: 400; margin-right: 6px; }
+    /* ===== Status strip (between screen and meter) ===== */
+    .px-status {
+      flex: none; min-height: 26px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    /* Labels sit on one line; each one ellipsises rather than pushing the row wider. */
+    .px-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; }
+    .px-model, .px-gpu {
+      font-size: 10px; letter-spacing: 1px; color: var(--vio-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .px-model b { color: var(--accent-hi); font-weight: 400; }
-    .px-gpu { font-size: 10px; letter-spacing: 1px; color: var(--vio-dim); }
     .px-gpu b { color: var(--cyan); font-weight: 400; }
     .px-scrbtns {
-      position: absolute;
-      bottom: 6px; right: 6px;
-      z-index: 2;
+      flex: none;
       display: none;
       gap: 5px;
     }
@@ -367,6 +376,19 @@
     }
     .px-mconfirm .yes:hover { background: var(--hot); border-color: var(--hot); color: #fff; }
     .px-mconfirm .no:hover { background: var(--accent); color: #fff; }
+
+    /* ===== Dictionary section (options panel) ===== */
+    .px-dict { flex: none; padding: 10px; border-top: 2px solid var(--win-edge); }
+    .px-dicthead { font-size: 12px; letter-spacing: 2px; color: var(--cyan); margin-bottom: 6px; }
+    .px-dictrow { display: flex; align-items: center; gap: 8px; }
+    .px-dictinfo { flex: 1; min-width: 0; font-size: 11px; color: var(--vio); }
+    .px-dictinfo.err { color: var(--hot); }
+    .px-dictbtn {
+      flex: none; background: var(--box); border: 2px solid var(--box-edge);
+      color: var(--ink); font-family: inherit; font-size: 11px; letter-spacing: 1px;
+      padding: 6px 10px; cursor: pointer;
+    }
+    .px-dictbtn:hover { background: var(--accent); border-color: var(--accent-hi); }
   </style>
 </head>
 <body>
@@ -385,15 +407,18 @@
       <div class="px-bezel">
         <div class="px-screen" id="screen">
           <div class="px-screen-inner" id="screen-inner"></div>
-          <div class="px-botleft">
-            <div class="px-model" id="model-label"></div>
-            <div class="px-model" id="llm-label"></div>
-            <div class="px-gpu" id="gpu-label"></div>
-          </div>
-          <div class="px-scrbtns" id="scrbtns">
-            <button class="px-scrbtn" id="copy-btn" title="Copy all text">COPY</button>
-            <button class="px-scrbtn" id="clear-btn" title="Clear screen">CLEAR</button>
-          </div>
+        </div>
+      </div>
+
+      <div class="px-status">
+        <div class="px-info">
+          <div class="px-model" id="model-label"></div>
+          <div class="px-model" id="llm-label"></div>
+          <div class="px-gpu" id="gpu-label"></div>
+        </div>
+        <div class="px-scrbtns" id="scrbtns">
+          <button class="px-scrbtn" id="copy-btn" title="Copy all text">COPY</button>
+          <button class="px-scrbtn" id="clear-btn" title="Clear screen">CLEAR</button>
         </div>
       </div>
 
@@ -429,6 +454,14 @@
           <button class="px-wbtn px-x" id="opts-close" title="Close">✕</button>
         </div>
         <div class="px-mlist" id="model-list"></div>
+        <div class="px-dict">
+          <div class="px-dicthead">Dictionary</div>
+          <div class="px-dictrow">
+            <span class="px-dictinfo" id="dict-info">…</span>
+            <button class="px-dictbtn" id="dict-open" title="Edit glossary.json">OPEN FILE</button>
+            <button class="px-dictbtn" id="dict-reload" title="Re-read the file">RELOAD</button>
+          </div>
+        </div>
         <div class="px-panel-foot">Pick a model to use it. Not downloaded yet → it'll download first.</div>
       </div>
     </div>

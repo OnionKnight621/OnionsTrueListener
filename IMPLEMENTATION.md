@@ -50,6 +50,17 @@ built-in OS dictation can't do (one language at a time).
       / delete (inline confirm). Models live in userData; active model in
       `config.json`; the whisper context is released & rebuilt on switch.
 
+- [x] **User dictionary.** Hand-editable `glossary.json` in userData: canonical word
+      + the variants Whisper mishears (`келем`/`кілем` → `килим`). Applied as the
+      very last step of the pipeline (after the LLM pass, so cleanup can't undo it).
+      Matching lives in the pure `glossary.js`; three modes — `root` (default:
+      matches a word start, keeps the ending, so one rule covers all inflections),
+      `word`, `anywhere` — with case upgraded to the transcript's. Options panel
+      shows the entry count + OPEN FILE / RELOAD; the file is re-read on mtime change.
+      `apply` returns the substitutions it made, rendered as a `FIXED келем → килим`
+      line under the result — free, since they're collected in the same pass.
+      Unit tests: `npm test`.
+
 - [x] **Phase 0 — Windows multi-GPU.** Backend chosen by `nvidia-smi compute_cap`:
       CUDA on Blackwell (cc ≥ 12), Vulkan on every other NVIDIA/AMD/Intel, CPU
       fallback. All three variants bundled; active GPU+backend shown on screen.
@@ -91,6 +102,9 @@ quality-of-life items (tray, overlay indicator, autostart, persistent mic).
    on Windows). Don't rely on graceful `context/model/llama.dispose()` for shutdown
    — force-exit like we already do (`app.exit(0)`). Releasing a context to switch
    LLM models needs the same caution (to validate).
-5. **Gemma-it needs few-shot, not instructions.** Telling it "output only the
+5. **JS `\b` is useless for Cyrillic.** It's an ASCII word boundary, so it never
+   fires between a space and `к` — `/\bкелем/` matches nothing. Use Unicode
+   lookarounds instead: `(?<![\p{L}\p{N}_])` … `(?![\p{L}\p{N}_])` with the `u` flag.
+6. **Gemma-it needs few-shot, not instructions.** Telling it "output only the
    cleaned text" fails — it replies like a chat assistant. Seeding the chat history
    with messy→clean example turns fixes it. See `cleanup.js`.

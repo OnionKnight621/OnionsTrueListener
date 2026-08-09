@@ -13,6 +13,13 @@ contextBridge.exposeInMainWorld('cleanup', {
   run: (text) => ipcRenderer.invoke('cleanup:run', text),
 });
 
+contextBridge.exposeInMainWorld('glossary', {
+  apply: (text) => ipcRenderer.invoke('glossary:apply', text),
+  info: () => ipcRenderer.invoke('glossary:info'),
+  reload: () => ipcRenderer.invoke('glossary:reload'),
+  open: () => ipcRenderer.invoke('glossary:open'),
+});
+
 contextBridge.exposeInMainWorld('actions', {
   paste: (text) => ipcRenderer.invoke('paste:text', text),
   copy: (text) => ipcRenderer.invoke('app:copy', text),
