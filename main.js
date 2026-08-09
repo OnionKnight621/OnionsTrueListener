@@ -8,6 +8,7 @@ const {
   addNativeLogListener,
 } = require('@fugood/whisper.node');
 const { uIOhook, UiohookKey } = require('uiohook-napi');
+const { cleanup } = require('./cleanup');
 
 // Safety net: log instead of popping the blocking "JS error" dialog (e.g. a
 // stray stream callback firing during shutdown). Real bugs still hit the console.
@@ -38,6 +39,21 @@ function modelFilePath(id) {
 const isDownloaded = (id) => { const p = modelFilePath(id); return !!p && fs.existsSync(p); };
 const activeModelId = () => loadConfig().model || DEFAULT_MODEL;
 const modelPath = () => modelFilePath(activeModelId());
+
+// ---------- Cleanup LLM (optional second pass) ----------
+// Single hard-coded model for now; the model-picker UI comes later (see
+// CLEANUP_MODEL_PLAN.md). Resolution mirrors whisper: a dev copy in ./models wins.
+const LLM = {
+  file: 'gemma-3-4b-it-Q4_K_M.gguf',
+  label: 'Gemma 3 4B',
+  url: 'https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf',
+};
+function llmModelPath() {
+  const local = path.join(__dirname, 'models', LLM.file);
+  return fs.existsSync(local) ? local : path.join(userModelDir(), LLM.file);
+}
+const llmDownloaded = () => fs.existsSync(llmModelPath());
+const cleanupEnabled = () => !!loadConfig().cleanup;
 
 let mainWindow = null;
 let activeReq = null; // in-flight model download (so we can abort it on close)
@@ -219,6 +235,23 @@ ipcMain.handle('whisper:transcribe', async (_event, arrayBuffer, language) => {
   const ms = Date.now() - t0;
   console.log(`[whisper] "${result.result?.trim()}" (${result.language}, ${ms}ms)`);
   return { text: (result.result || '').trim(), language: result.language, ms };
+});
+
+// ---------- Cleanup LLM ----------
+ipcMain.handle('cleanup:info', () => ({
+  label: LLM.label, downloaded: llmDownloaded(), enabled: cleanupEnabled(),
+}));
+
+ipcMain.handle('cleanup:setEnabled', (_e, on) => {
+  saveConfig({ cleanup: !!on });
+  return { enabled: cleanupEnabled() };
+});
+
+// Tidy the transcript. No-op (returns the input) unless enabled and downloaded —
+// cleanup.js itself also fails open, so paste is never blocked by the LLM.
+ipcMain.handle('cleanup:run', async (_e, text) => {
+  if (!cleanupEnabled() || !llmDownloaded()) return text;
+  return cleanup(text, llmModelPath());
 });
 
 ipcMain.handle('paste:text', async (_event, text) => {

@@ -21,6 +21,9 @@ const overlay = document.getElementById('overlay');
 const modelListEl = document.getElementById('model-list');
 const gpuLabelEl = document.getElementById('gpu-label');
 const modelLabelEl = document.getElementById('model-label');
+const llmLabelEl = document.getElementById('llm-label');
+const cleanDrop = document.getElementById('clean-drop');
+const cleanVal = document.getElementById('clean-val');
 
 // Window controls
 document.getElementById('min-btn').addEventListener('click', () => window.win.minimize());
@@ -47,16 +50,37 @@ let triggeredByPtt = false;
 let selectedDeviceId = null;  // null = default device
 let currentLang = localStorage.getItem('lang') || 'uk';
 let hotkeyName = 'F9';
-let lastText = '';
+let lastText = '';           // final text (cleaned, if cleanup ran)
+let lastRaw = '';            // pre-cleanup text; '' when cleanup didn't run / no change
 let modelReady = false;
 let activeModelId = null;
 let modelItems = [];      // catalog with downloaded/active flags (from main)
 let downloadingGb = null; // size of the model currently downloading
+let cleanupOn = false;    // second-pass LLM cleanup toggle
 
 // ---------- Screen ----------
 function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
+// Result body: a single boxed text, or RAW vs CLEANED side-by-side whenever the
+// cleanup pass ran — so its impact is always visible, even when it changed nothing.
+function resultHtml(cleaned) {
+  if (lastRaw) {
+    const same = lastRaw === cleaned;
+    return `<div class="scr-compare">
+        <div class="scr-block">
+          <div class="scr-blabel">RAW</div>
+          <div class="scr-text scr-box">${escapeHtml(lastRaw)}</div>
+        </div>
+        <div class="scr-block">
+          <div class="scr-blabel">CLEANED${same ? ' · no change' : ''}</div>
+          <div class="scr-text scr-box">${escapeHtml(cleaned)}</div>
+        </div>
+      </div>`;
+  }
+  return `<div class="scr-text scr-box">${escapeHtml(cleaned)}</div>`;
+}
+
 function renderScreen(state, payload = '') {
   let html = '';
   if (state === 'idle') {
@@ -69,6 +93,9 @@ function renderScreen(state, payload = '') {
   } else if (state === 'processing') {
     html = `<div class="scr-big">PROCESSING…</div>
       <div class="scr-hint">transcribing on GPU</div>`;
+  } else if (state === 'cleaning') {
+    html = `<div class="scr-big">CLEANING…</div>
+      <div class="scr-hint">second-pass LLM tidy-up</div>`;
   } else if (state === 'capture') {
     html = `<div class="scr-big">PRESS…</div>
       <div class="scr-hint">a key or combo · <b>Esc</b> to cancel</div>`;
@@ -84,7 +111,7 @@ function renderScreen(state, payload = '') {
     html = `<div class="scr-big">DOWNLOADING…</div>
       <div class="scr-hint">${pct}% · one-time (~${gb} GB)</div>`;
   } else if (state === 'result') {
-    html = `<div class="scr-text">${escapeHtml(payload)}</div>`;
+    html = resultHtml(payload);
   } else if (state === 'error') {
     html = `<div class="scr-big err">ERROR</div><div class="scr-hint">${escapeHtml(payload)}</div>`;
   }
@@ -290,11 +317,18 @@ async function stop() {
   try {
     const res = await window.whisper.transcribe(pcm.buffer, currentLang);
     if (res.text) {
-      lastText = res.text;
+      let text = res.text;
+      lastRaw = '';
+      if (cleanupOn) {
+        renderScreen('cleaning');
+        text = await window.cleanup.run(text); // fails open to raw text in main
+        lastRaw = res.text; // keep the pre-cleanup text to show the diff
+      }
+      lastText = text;
       beep(523, 150);
-      await window.actions.copy(res.text); // auto-copy to clipboard
-      if (triggeredByPtt) await window.actions.paste(res.text);
-      renderScreen('result', res.text);
+      await window.actions.copy(text); // auto-copy to clipboard
+      if (triggeredByPtt) await window.actions.paste(text);
+      renderScreen('result', text);
     } else {
       renderScreen('idle');
     }
@@ -422,6 +456,20 @@ function updateGpu(d) {
 window.gpu.onUpdate(updateGpu);
 window.gpu.info().then(updateGpu);
 
+// ---------- Cleanup (second-pass LLM) ----------
+function updateCleanupUi(info) {
+  cleanupOn = !!info.enabled;
+  cleanVal.textContent = cleanupOn ? 'ON' : 'OFF';
+  cleanDrop.classList.toggle('is-on', cleanupOn);
+  const tail = info.downloaded ? (cleanupOn ? ' · on' : ' · off') : ' · not installed';
+  llmLabelEl.innerHTML = `LLM: <b>${escapeHtml(info.label)}</b>${tail}`;
+}
+cleanDrop.addEventListener('click', async () => {
+  await window.cleanup.setEnabled(!cleanupOn);
+  updateCleanupUi(await window.cleanup.info());
+});
+window.cleanup.info().then(updateCleanupUi);
+
 copyBtn.addEventListener('click', async (e) => {
   e.stopPropagation();
   if (!lastText) return;
@@ -433,6 +481,7 @@ copyBtn.addEventListener('click', async (e) => {
 clearBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   lastText = '';
+  lastRaw = '';
   renderScreen('idle');
 });
 

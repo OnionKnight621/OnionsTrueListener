@@ -7,6 +7,12 @@ contextBridge.exposeInMainWorld('whisper', {
     ipcRenderer.invoke('whisper:transcribe', arrayBuffer, language),
 });
 
+contextBridge.exposeInMainWorld('cleanup', {
+  info: () => ipcRenderer.invoke('cleanup:info'),
+  setEnabled: (on) => ipcRenderer.invoke('cleanup:setEnabled', on),
+  run: (text) => ipcRenderer.invoke('cleanup:run', text),
+});
+
 contextBridge.exposeInMainWorld('actions', {
   paste: (text) => ipcRenderer.invoke('paste:text', text),
   copy: (text) => ipcRenderer.invoke('app:copy', text),

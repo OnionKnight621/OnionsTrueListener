@@ -63,11 +63,13 @@ quality-of-life items (tray, overlay indicator, autostart, persistent mic).
 
 ## Key decisions
 
-- **No LLM stage (for now).** `large-v3` handles code-switching well on its own;
-  a second model was dropped (YAGNI). The language selector (force `uk`) fixes the
-  occasional uk→ru misdetection cheaply. Revisit a local LLM
-  (`node-llama-cpp`, GGUF Gemma 3 / Qwen) only if inconsistent Cyrillization of
-  English terms becomes annoying.
+- **Optional LLM cleanup stage (in progress).** `large-v3` handles code-switching
+  well on its own, so the second pass is **off by default** — but it's now wired in
+  as an opt-in toggle for consistent Cyrillization of English terms (фетч→fetch),
+  punctuation and casing. Engine: **Gemma 3 4B Q4 via `node-llama-cpp` on Vulkan**
+  (Vulkan sidesteps the Blackwell sm_120 CUDA build pain). Few-shot prompting is
+  required to stop Gemma-it from acting like a chat assistant. Fails open: a bad
+  cleanup never blocks the paste. See **[CLEANUP_MODEL_PLAN.md](./CLEANUP_MODEL_PLAN.md)**.
 - **In-process Node binding, not a subprocess.** `transcribeData` takes PCM
   16-bit mono 16 kHz — exactly what Web Audio produces.
 - **Window must stay focusable.** `focusable: false` made paste trivial but killed
@@ -85,3 +87,10 @@ quality-of-life items (tray, overlay indicator, autostart, persistent mic).
 3. **Focus restore must be gentle.** `SetForegroundWindow` + `AttachThreadInput`
    is fine; adding `ShowWindow` / `BringWindowToTop` was the suspected cause of
    user windows getting hidden/minimized — don't reintroduce them.
+4. **node-llama-cpp Vulkan dispose crashes at exit** (access violation 0xC0000005
+   on Windows). Don't rely on graceful `context/model/llama.dispose()` for shutdown
+   — force-exit like we already do (`app.exit(0)`). Releasing a context to switch
+   LLM models needs the same caution (to validate).
+5. **Gemma-it needs few-shot, not instructions.** Telling it "output only the
+   cleaned text" fails — it replies like a chat assistant. Seeding the chat history
+   with messy→clean example turns fixes it. See `cleanup.js`.

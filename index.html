@@ -163,6 +163,27 @@
       user-select: text;
       white-space: pre-wrap;
     }
+    /* thin frame around the text holder; scrollbar appears only on overflow */
+    .scr-box {
+      border: 1px solid var(--screen-edge);
+      background: rgba(124, 92, 255, 0.05);
+      padding: 8px 10px;
+    }
+    .scr-box::-webkit-scrollbar { width: 8px; }
+    .scr-box::-webkit-scrollbar-thumb { background: var(--box-edge); }
+    .scr-box::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+    .scr-box::-webkit-scrollbar-track { background: transparent; }
+
+    /* RAW vs CLEANED: stacked, each block scrolls independently */
+    .scr-compare {
+      display: flex; flex-direction: column; gap: 8px;
+      width: 100%; height: 100%; min-height: 0;
+    }
+    .scr-block { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 3px; }
+    .scr-blabel {
+      font-size: 9px; letter-spacing: 2px; color: var(--vio-dim); text-transform: uppercase;
+    }
+    .scr-compare .scr-text { font-size: 14px; flex: 1; min-height: 0; }
     .px-botleft {
       position: absolute; bottom: 8px; left: 10px; z-index: 2;
       display: flex; flex-direction: column; gap: 2px;
@@ -266,6 +287,10 @@
       max-height: 220px;
       overflow-y: auto;
     }
+    /* cleanup toggle: tint the value when on */
+    #clean-drop.is-on { border-color: var(--accent-hi); }
+    #clean-drop.is-on #clean-val { color: var(--cyan); }
+
     .px-drop.open .px-popup { display: block; }
     /* mic popup is wider than its button so full device names are readable */
     #mic-popup { right: auto; width: 300px; }
@@ -362,6 +387,7 @@
           <div class="px-screen-inner" id="screen-inner"></div>
           <div class="px-botleft">
             <div class="px-model" id="model-label"></div>
+            <div class="px-model" id="llm-label"></div>
             <div class="px-gpu" id="gpu-label"></div>
           </div>
           <div class="px-scrbtns" id="scrbtns">
@@ -383,6 +409,10 @@
           <span class="px-droplabel">Mic</span>
           <span class="px-dropval" id="mic-val">DEFAULT ▾</span>
           <div class="px-popup" id="mic-popup"></div>
+        </div>
+        <div class="px-drop" id="clean-drop" tabindex="0" title="Second-pass LLM cleanup">
+          <span class="px-droplabel">Clean</span>
+          <span class="px-dropval" id="clean-val">OFF</span>
         </div>
         <button class="px-hot" id="hotkey-btn">
           <span class="px-droplabel">Hotkey</span>

@@ -38,6 +38,7 @@
       "!models/**",
       "!samples/**",
       "!test-transcribe.js",
+      "!test-cleanup.mjs",
       "!.claude/**"
     ],
     "win": {
@@ -50,6 +51,7 @@
   },
   "dependencies": {
     "@fugood/whisper.node": "^1.0.19",
+    "node-llama-cpp": "^3.18.1",
     "uiohook-napi": "^1.5.5"
   }
 }
